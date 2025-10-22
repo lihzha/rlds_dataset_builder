@@ -2,3 +2,8 @@
 wandb
 __pycache__
 .idea
+*.egg-info
+*.err
+*.out
+*.json
+.claude/
