@@ -113,7 +113,8 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                             "is_first": i == 0,
                             "is_last": i == (num_timesteps - 1),
                             "is_terminal": i == (num_timesteps - 1),
-                            "language_instruction": f"demo_{demo_name}",
+                            # "language_instruction": f"demo_{demo_name}",
+                            "language_instruction": "pick the red block and place it forward by 0.5m.",
                         }
                     )
 
@@ -216,7 +217,7 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
     def _split_paths(self):
         """Define filepaths for data splits."""
         # TODO: Update this path to point to your actual HDF5 file(s)
-        hdf5_file = Path("/path/to/your/hdf5/file")
+        hdf5_file = Path("~/prbench_dir/tidybot_planner/data/rlds_dataset_builder/sim_demos_ground_red_1/sim_271.hdf5")
 
         if not hdf5_file.exists():
             raise FileNotFoundError(
