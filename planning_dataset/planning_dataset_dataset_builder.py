@@ -1,147 +1,149 @@
-import pickle
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator, Tuple
+from typing import Any
 
-import cv2
+import h5py
 import numpy as np
 import tensorflow_datasets as tfds
 
 from planning_dataset.conversion_utils import MultiThreadedDatasetBuilder
 
 
-def read_video_frames(video_path: Path) -> list[np.ndarray]:
-    """Read all frames from a video file."""
-    cap = cv2.VideoCapture(str(video_path))
-    frames = []
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        # Convert BGR to RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frames.append(frame_rgb)
-    cap.release()
-    return frames
+def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
+    """Yields episodes for list of HDF5 file paths.
 
+    Each path should point to an HDF5 file containing multiple demos.
+    HDF5 structure:
+        /data/demo_0/actions  shape=(T, 10)
+        /data/demo_0/obs/arm_pos  shape=(T, 3)
+        /data/demo_0/obs/arm_quat  shape=(T, 4)
+        /data/demo_0/obs/base_image  shape=(T, 84, 84, 3)
+        /data/demo_0/obs/wrist_image  shape=(T, 84, 84, 3)
+        /data/demo_0/obs/gripper_pos  shape=(T, 1)
+        /data/demo_0/obs/base_pose  shape=(T, 3)
+        /data/demo_0/obs/cube{1,2,3}_pos  shape=(T, 3)
+        /data/demo_0/obs/cube{1,2,3}_quat  shape=(T, 4)
+    """
 
-def _generate_examples(paths) -> Iterator[Tuple[str, Any]]:
-    """Yields episodes for list of data paths."""
+    def _parse_hdf5_file(hdf5_path):
+        """Parse all demos from a single HDF5 file.
 
-    def _parse_example(demo_path):
-        """Parse a single demonstration episode.
+        Args:
+            hdf5_path: Path to HDF5 file
 
-        demo_path format: /path/to/demos/{demo_name}
+        Yields:
+            Tuple of (demo_key, demo_data) for each demo in the file
         """
-        demo_path = Path(demo_path)
-        demo_name = demo_path.name
+        hdf5_path = Path(hdf5_path)
 
-        # Load required files
-        pkl_path = demo_path / "data.pkl"
-        base_video_path = demo_path / "base_image.mp4"
-        wrist_video_path = demo_path / "wrist_image.mp4"
+        with h5py.File(hdf5_path, "r") as f:
+            # Get all demo groups (e.g., demo_0, demo_1, ...)
+            if "data" not in f:
+                raise ValueError(f"HDF5 file {hdf5_path} missing 'data' group")
 
-        # Check if all required files exist
-        if not pkl_path.exists():
-            raise FileNotFoundError(f"data.pkl not found in {demo_path}")
-        if not base_video_path.exists():
-            raise FileNotFoundError(f"base_image.mp4 not found in {demo_path}")
-        if not wrist_video_path.exists():
-            raise FileNotFoundError(f"wrist_image.mp4 not found in {demo_path}")
+            data_group = f["data"]
+            demo_names = sorted(data_group.keys())
 
-        # Load pickle data
-        with open(pkl_path, "rb") as f:
-            data = pickle.load(f)
+            for demo_name in demo_names:
+                demo_group = data_group[demo_name]
 
-        timestamps = data["timestamps"]
-        observations = data["observations"]
-        actions = data["actions"]
+                # Load actions
+                actions = np.array(demo_group["actions"])  # shape (T, 10)
 
-        # Read video frames
-        base_frames = read_video_frames(base_video_path)
-        wrist_frames = read_video_frames(wrist_video_path)
+                # Load observations
+                obs_group = demo_group["obs"]
+                arm_pos = np.array(obs_group["arm_pos"])  # shape (T, 3)
+                arm_quat = np.array(obs_group["arm_quat"])  # shape (T, 4)
+                gripper_pos = np.array(obs_group["gripper_pos"])  # shape (T, 1)
+                base_image = np.array(obs_group["base_image"])  # shape (T, 84, 84, 3)
+                wrist_image = np.array(obs_group["wrist_image"])  # shape (T, 84, 84, 3)
 
-        # Verify alignment
-        num_timesteps = len(timestamps)
-        num_base_frames = len(base_frames)
-        num_wrist_frames = len(wrist_frames)
+                # Optional: Load object poses (cubes, base_pose) for metadata
+                base_pose = np.array(obs_group["base_pose"]) if "base_pose" in obs_group else None
+                cube1_pos = np.array(obs_group["cube1_pos"]) if "cube1_pos" in obs_group else None
+                cube1_quat = np.array(obs_group["cube1_quat"]) if "cube1_quat" in obs_group else None
+                cube2_pos = np.array(obs_group["cube2_pos"]) if "cube2_pos" in obs_group else None
+                cube2_quat = np.array(obs_group["cube2_quat"]) if "cube2_quat" in obs_group else None
+                cube3_pos = np.array(obs_group["cube3_pos"]) if "cube3_pos" in obs_group else None
+                cube3_quat = np.array(obs_group["cube3_quat"]) if "cube3_quat" in obs_group else None
 
-        if not (num_timesteps == num_base_frames == num_wrist_frames):
-            raise ValueError(
-                f"Misalignment in {demo_name}: "
-                f"timesteps={num_timesteps}, base_frames={num_base_frames}, "
-                f"wrist_frames={num_wrist_frames}"
-            )
+                # Verify data alignment
+                num_timesteps = len(actions)
+                if not (
+                    len(arm_pos)
+                    == len(arm_quat)
+                    == len(gripper_pos)
+                    == len(base_image)
+                    == len(wrist_image)
+                    == num_timesteps
+                ):
+                    raise ValueError(
+                        f"Data misalignment in {hdf5_path}/{demo_name}: "
+                        f"actions={len(actions)}, arm_pos={len(arm_pos)}, "
+                        f"arm_quat={len(arm_quat)}, gripper_pos={len(gripper_pos)}, "
+                        f"base_image={len(base_image)}, wrist_image={len(wrist_image)}"
+                    )
 
-        # Build episode steps
-        episode = []
-        for i in range(num_timesteps):
-            obs = observations[i]
-            action = actions[i]
+                # Build episode steps
+                episode = []
+                for i in range(num_timesteps):
+                    # Construct state: arm_pos (3) + arm_quat (4) + gripper_pos (1) = 8
+                    state = np.concatenate(
+                        [
+                            arm_pos[i],  # (3,)
+                            arm_quat[i],  # (4,)
+                            gripper_pos[i],  # (1,)
+                        ]
+                    ).astype(np.float32)
 
-            # Construct state: arm_pos (3) + arm_quat (4) + gripper_pos (1) = 8
-            state = np.concatenate(
-                [
-                    obs["arm_pos"],  # (3,)
-                    obs["arm_quat"],  # (4,)
-                    obs["gripper_pos"],  # (1,)
-                ]
-            ).astype(np.float32)
+                    # Actions are 10-dimensional, we'll store them as-is
+                    action_vector = actions[i].astype(np.float32)
 
-            # Construct action: arm_pos (3) + arm_quat (4) + gripper_pos (1) = 8
-            action_vector = np.concatenate(
-                [
-                    action["arm_pos"],  # (3,)
-                    action["arm_quat"],  # (4,)
-                    action["gripper_pos"],  # (1,)
-                ]
-            ).astype(np.float32)
+                    # Add step to episode
+                    episode.append(
+                        {
+                            "observation": {
+                                "base_image": base_image[i].astype(np.uint8),
+                                "wrist_image": wrist_image[i].astype(np.uint8),
+                                "state": state,
+                            },
+                            "action": action_vector,
+                            "discount": 1.0,
+                            "reward": float(i == (num_timesteps - 1)),
+                            "is_first": i == 0,
+                            "is_last": i == (num_timesteps - 1),
+                            "is_terminal": i == (num_timesteps - 1),
+                            "language_instruction": f"demo_{demo_name}",
+                        }
+                    )
 
-            # Add step to episode
-            episode.append(
-                {
-                    "observation": {
-                        "base_image": base_frames[i],
-                        "wrist_image": wrist_frames[i],
-                        "state": state,
+                # Create output data sample
+                sample = {
+                    "steps": episode,
+                    "episode_metadata": {
+                        "file_path": str(hdf5_path),
+                        "demo_name": demo_name,
                     },
-                    "action": action_vector,
-                    "discount": 1.0,
-                    "reward": float(i == (num_timesteps - 1)),
-                    "is_first": i == 0,
-                    "is_last": i == (num_timesteps - 1),
-                    "is_terminal": i == (num_timesteps - 1),
-                    "language_instruction": f"tiger_demo_{demo_name}",
                 }
-            )
 
-        # Create output data sample
-        sample = {
-            "steps": episode,
-            "episode_metadata": {
-                "file_path": str(demo_path),
-                "demo_name": demo_name,
-            },
-        }
+                # Create unique key combining file name and demo name
+                unique_key = f"{hdf5_path.stem}_{demo_name}"
+                yield unique_key, sample
 
-        return demo_name, sample
-
-    # Parse examples from paths
-    for sample in paths:
+    # Parse examples from HDF5 file paths
+    for hdf5_path in paths:
         try:
-            unique_key, episode_data = _parse_example(sample)
-            yield unique_key, episode_data
+            # Each HDF5 file may contain multiple demos
+            for unique_key, episode_data in _parse_hdf5_file(hdf5_path):
+                yield unique_key, episode_data
         except Exception as e:
-            # Extract demo name from path
-            demo_path = Path(sample)
-            demo_name = demo_path.name
-
             # Log the error
-            print(f"WARNING: Skipping demo {demo_name}: {type(e).__name__}: {str(e)}")
+            print(f"WARNING: Skipping HDF5 file {hdf5_path}: {type(e).__name__}: {e!s}")
             continue
 
 
 class PlanningDataset(MultiThreadedDatasetBuilder):
-    """DatasetBuilder for planning dataset."""
+    """DatasetBuilder for planning dataset from HDF5 files."""
 
     VERSION = tfds.core.Version("1.0.0")
     RELEASE_NOTES = {
@@ -161,13 +163,13 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
                             "observation": tfds.features.FeaturesDict(
                                 {
                                     "base_image": tfds.features.Image(
-                                        shape=(360, 640, 3),
+                                        shape=(84, 84, 3),
                                         dtype=np.uint8,
                                         encoding_format="jpeg",
                                         doc="Base camera RGB observation.",
                                     ),
                                     "wrist_image": tfds.features.Image(
-                                        shape=(480, 640, 3),
+                                        shape=(84, 84, 3),
                                         dtype=np.uint8,
                                         encoding_format="jpeg",
                                         doc="Wrist camera RGB observation.",
@@ -180,9 +182,9 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
                                 }
                             ),
                             "action": tfds.features.Tensor(
-                                shape=(8,),
+                                shape=(10,),
                                 dtype=np.float32,
-                                doc="Robot action, consists of [arm_pos (3), arm_quat (4), gripper_pos (1)].",
+                                doc="Robot action, 10-dimensional action vector.",
                             ),
                             "discount": tfds.features.Scalar(
                                 dtype=np.float32,
@@ -192,29 +194,19 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
                                 dtype=np.float32,
                                 doc="Reward if provided, 1 on final step for demos.",
                             ),
-                            "is_first": tfds.features.Scalar(
-                                dtype=np.bool_, doc="True on first step of the episode."
-                            ),
-                            "is_last": tfds.features.Scalar(
-                                dtype=np.bool_, doc="True on last step of the episode."
-                            ),
+                            "is_first": tfds.features.Scalar(dtype=np.bool_, doc="True on first step of the episode."),
+                            "is_last": tfds.features.Scalar(dtype=np.bool_, doc="True on last step of the episode."),
                             "is_terminal": tfds.features.Scalar(
                                 dtype=np.bool_,
                                 doc="True on last step of the episode if it is a terminal step, True for demos.",
                             ),
-                            "language_instruction": tfds.features.Text(
-                                doc="Language Instruction."
-                            ),
+                            "language_instruction": tfds.features.Text(doc="Language Instruction."),
                         }
                     ),
                     "episode_metadata": tfds.features.FeaturesDict(
                         {
-                            "file_path": tfds.features.Text(
-                                doc="Path to the original data file."
-                            ),
-                            "demo_name": tfds.features.Text(
-                                doc="Name of the demonstration."
-                            ),
+                            "file_path": tfds.features.Text(doc="Path to the original HDF5 file."),
+                            "demo_name": tfds.features.Text(doc="Name of the demonstration (e.g., demo_0, demo_1)."),
                         }
                     ),
                 }
@@ -223,20 +215,14 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
 
     def _split_paths(self):
         """Define filepaths for data splits."""
-        # TODO: Update this path to point to your actual data directory
-        base_path = Path("/path/to/your/tiger/demos")
+        # TODO: Update this path to point to your actual HDF5 file(s)
+        hdf5_file = Path("/path/to/your/hdf5/file")
 
-        if not base_path.exists():
+        if not hdf5_file.exists():
             raise FileNotFoundError(
-                f"Data directory not found: {base_path}\n"
-                "Please update the path in _split_paths() method."
+                f"Data directory not found: {hdf5_file}\nPlease update the path in _split_paths() method."
             )
 
-        # Get all demo directories
-        all_demos = sorted([str(d) for d in base_path.iterdir() if d.is_dir()])
-
-        print(f"Found {len(all_demos)} demonstrations")
-
         return {
-            "train": all_demos,
+            "train": [hdf5_file],
         }
