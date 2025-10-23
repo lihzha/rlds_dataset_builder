@@ -1,3 +1,3 @@
 from setuptools import setup
 
-setup(name="agibot_dataset", packages=["agibot_dataset"])
+setup(name="planning_dataset", packages=["planning_dataset"])
