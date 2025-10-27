@@ -90,6 +90,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                     # Construct state: arm_pos (3) + arm_quat (4) + gripper_pos (1) = 8
                     state = np.concatenate(
                         [
+                            base_pose[i], # (3,)
                             arm_pos[i],  # (3,)
                             arm_quat[i],  # (4,)
                             gripper_pos[i],  # (1,)
