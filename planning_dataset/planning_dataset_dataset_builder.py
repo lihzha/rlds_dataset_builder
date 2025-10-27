@@ -177,9 +177,9 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
                                         doc="Wrist camera RGB observation.",
                                     ),
                                     "state": tfds.features.Tensor(
-                                        shape=(8,),
+                                        shape=(11,),
                                         dtype=np.float32,
-                                        doc="Robot state, consists of [arm_pos (3), arm_quat (4), gripper_pos (1)].",
+                                        doc="Robot state, consists of [base_pose (3), arm_pos (3), arm_quat (4), gripper_pos (1)].",
                                     ),
                                 }
                             ),
