@@ -220,7 +220,9 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
     def _split_paths(self):
         """Define filepaths for data splits."""
         # TODO: Update this path to point to your actual HDF5 file(s)
-        hdf5_file = Path("/home/yixuan//prbench_dir/tidybot_planner/data/sim_demos_ground_red_1/sim_271.hdf5")
+        hdf5_file = Path(
+            "/home/yixuan//prbench_dir/tidybot_planner/data/sim_demos_ground_random_0/sim_834_language.hdf5"
+        )
 
         if not hdf5_file.exists():
             raise FileNotFoundError(
