@@ -67,6 +67,8 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                 cube3_pos = np.array(obs_group["cube3_pos"]) if "cube3_pos" in obs_group else None
                 cube3_quat = np.array(obs_group["cube3_quat"]) if "cube3_quat" in obs_group else None
 
+                language_instructions = demo_group["language"]
+
                 # Verify data alignment
                 num_timesteps = len(actions)
                 if not (
@@ -90,7 +92,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                     # Construct state: arm_pos (3) + arm_quat (4) + gripper_pos (1) = 8
                     state = np.concatenate(
                         [
-                            base_pose[i], # (3,)
+                            base_pose[i],  # (3,)
                             arm_pos[i],  # (3,)
                             arm_quat[i],  # (4,)
                             gripper_pos[i],  # (1,)
@@ -115,7 +117,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                             "is_last": i == (num_timesteps - 1),
                             "is_terminal": i == (num_timesteps - 1),
                             # "language_instruction": f"demo_{demo_name}",
-                            "language_instruction": "pick the red block and place it forward by 0.5m.",
+                            "language_instruction": language_instructions[i].astype(str),
                         }
                     )
 
