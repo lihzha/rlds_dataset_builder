@@ -117,7 +117,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                             "is_last": i == (num_timesteps - 1),
                             "is_terminal": i == (num_timesteps - 1),
                             # "language_instruction": f"demo_{demo_name}",
-                            "language_instruction": language_instructions.astype(str),
+                            "language_instruction": np.array(language_instructions).item().astype(str),
                         }
                     )
 
