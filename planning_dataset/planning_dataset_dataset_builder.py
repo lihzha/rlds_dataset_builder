@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+import os
 from pathlib import Path
 from typing import Any
 
@@ -219,10 +220,8 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
 
     def _split_paths(self):
         """Define filepaths for data splits."""
-        # TODO: Update this path to point to your actual HDF5 file(s)
-        hdf5_file = Path(
-            "/home/yixuan//prbench_dir/tidybot_planner/data/sim_demos_ground_random_0/sim_834_language.hdf5"
-        )
+        # TODO: Get actual HDF5 file paths from env variables
+        hdf5_file = Path(os.getenv("HDF5_FILE_PATH"))
 
         if not hdf5_file.exists():
             raise FileNotFoundError(
