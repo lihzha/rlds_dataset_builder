@@ -1,7 +1,12 @@
+#!/bin/bash
+
 # export HDF5_FILE_PATH=/home/yixuan/prbench_dir/tidybot_planner/data/sim_demos_ground_random_10k/sim_10301.hdf5
 # export OLD_DATASET_NAME=planning_dataset_with_base_trial1
 
 # 1. Build dataset
+
+# activate rlds conda env
+source ~/miniconda3/etc/profile.d/conda.sh
 conda activate rlds
 cd ~/prbench_dir/tidybot_planner/data/rlds_dataset_builder/planning_dataset
 tfds build --overwrite
