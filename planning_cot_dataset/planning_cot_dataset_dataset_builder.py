@@ -208,7 +208,7 @@ class PlanningCoTDataset(MultiThreadedDatasetBuilder):
                                 doc="True on last step of the episode if it is a terminal step, True for demos.",
                             ),
                             "language_instruction": tfds.features.Text(doc="Language Instruction."),
-                            "language_action": tfds.features.Text(doc="Language Action."),
+                            "predicate": tfds.features.Text(doc="Language Action."),
                         }
                     ),
                     "episode_metadata": tfds.features.FeaturesDict(
