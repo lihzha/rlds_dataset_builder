@@ -150,7 +150,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
             continue
 
 
-class PlanningCoTDataset(MultiThreadedDatasetBuilder):
+class PlanningCotDataset(MultiThreadedDatasetBuilder):
     """DatasetBuilder for planning dataset from HDF5 files."""
 
     VERSION = tfds.core.Version("1.0.0")

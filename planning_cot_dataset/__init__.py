@@ -1,1 +1,1 @@
-from .planning_cot_dataset_dataset_builder import PlanningCoTDataset
+from .planning_cot_dataset_dataset_builder import PlanningCotDataset
