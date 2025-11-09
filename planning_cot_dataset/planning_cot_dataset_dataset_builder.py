@@ -69,7 +69,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                 cube3_pos = np.array(obs_group["cube3_pos"]) if "cube3_pos" in obs_group else None
                 cube3_quat = np.array(obs_group["cube3_quat"]) if "cube3_quat" in obs_group else None
 
-                language_instructions = demo_group["language"]
+                # language_instructions = demo_group["language"]
 
                 # Verify data alignment
                 num_timesteps = len(actions)
@@ -119,7 +119,8 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                             "is_last": i == (num_timesteps - 1),
                             "is_terminal": i == (num_timesteps - 1),
                             # "language_instruction": f"demo_{demo_name}",
-                            "language_instruction": np.array(language_instructions).item().decode(),
+                            # "language_instruction": np.array(language_instructions).item().decode(),
+                            "language_instruction": "Pick up the red block and place it forward by 0.5m.",
                             "predicate": np.array(predicates[i]).item().decode()
                         }
                     )
