@@ -10,6 +10,8 @@ source ~/miniconda3/etc/profile.d/conda.sh
 conda activate rlds
 cd ~/prbench_dir/tidybot_planner/data/rlds_dataset_builder/planning_dataset
 
+ulimit -n 65535
+
 
 if tfds build --overwrite; then
     echo "✅ Step 1 completed successfully, proceeding to upload."
