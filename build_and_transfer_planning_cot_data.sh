@@ -15,11 +15,11 @@ ulimit -n 65535
 if tfds build --overwrite; then
     echo "✅ Step 1 completed successfully, proceeding to upload."
 
-    # 2. Rename existing dataset on GCS. Read new dataset name from env variable
-    gsutil mv gs://pi0-cot/OXE/planning_cot_dataset gs://pi0-cot/OXE/${OLD_DATASET_NAME}
+    # # 2. Rename existing dataset on GCS. Read new dataset name from env variable
+    # gsutil mv gs://pi0-cot/OXE/planning_cot_dataset gs://pi0-cot/OXE/${OLD_DATASET_NAME}
 
     # 3. Transfer new dataset to GCS
-    gsutil -m cp -r ~/tensorflow_datasets/planning_cot_dataset gs://pi0-cot/OXE/planning_cot_dataset
+    gsutil -m cp -r ~/tensorflow_datasets/planning_cot_dataset gs://pi0-cot/OXE/planning_cot_dataset_multiobjects
 else
     echo "❌ TFDS build failed. Aborting remaining steps."
     exit 1
