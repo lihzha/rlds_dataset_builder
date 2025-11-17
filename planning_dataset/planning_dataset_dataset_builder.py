@@ -21,8 +21,8 @@ def _quat_to_axis_angle(q: np.ndarray) -> np.ndarray:
     theta = 2.0 * half
     s = np.sin(half)
     if theta < 1e-12 or s < 1e-12:
-        return np.zeros(3, dtype=float)
-    axis = np.array([x, y, z], dtype=float) / s
+        return np.zeros(3, dtype=q.dtype)
+    axis = np.array([x, y, z]) / s
     return axis * theta
 
 
