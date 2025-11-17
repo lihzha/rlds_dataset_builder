@@ -10,6 +10,22 @@ import tensorflow_datasets as tfds
 from planning_dataset.conversion_utils import MultiThreadedDatasetBuilder
 
 
+def _quat_to_axis_angle(q: np.ndarray) -> np.ndarray:
+    """Unit quaternion [w, x, y, z] -> axis-angle vector (so(3))."""
+    # Ensure q[0] >= 0 to keep the short path
+    if q[0] < 0:
+        q = -q
+    w, x, y, z = q
+    w = np.clip(w, -1.0, 1.0)
+    half = np.arccos(w)
+    theta = 2.0 * half
+    s = np.sin(half)
+    if theta < 1e-12 or s < 1e-12:
+        return np.zeros(3, dtype=float)
+    axis = np.array([x, y, z], dtype=float) / s
+    return axis * theta
+
+
 def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
     """Yields episodes for list of HDF5 file paths.
 
@@ -102,6 +118,11 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
 
                     # Actions are 10-dimensional, we'll store them as-is
                     action_vector = actions[i].astype(np.float32)
+                    if len(action_vector) == 11:
+                        # turn into axis angle
+                        action_vector = np.concatenate(
+                            [action_vector[:6], _quat_to_axis_angle(action_vector[6:10]), action_vector[10:]], axis=-1
+                        )
 
                     # Add step to episode
                     episode.append(
