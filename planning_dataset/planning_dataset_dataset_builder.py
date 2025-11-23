@@ -189,13 +189,13 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
                             "observation": tfds.features.FeaturesDict(
                                 {
                                     "base_image": tfds.features.Image(
-                                        shape=(84, 84, 3),
+                                        shape=(224, 224, 3),
                                         dtype=np.uint8,
                                         encoding_format="jpeg",
                                         doc="Base camera RGB observation.",
                                     ),
                                     "wrist_image": tfds.features.Image(
-                                        shape=(84, 84, 3),
+                                        shape=(224, 224, 3),
                                         dtype=np.uint8,
                                         encoding_format="jpeg",
                                         doc="Wrist camera RGB observation.",
