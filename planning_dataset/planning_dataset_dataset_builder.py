@@ -179,8 +179,44 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
     MAX_PATHS_IN_MEMORY = 50  # number of paths converted & stored in memory before writing to disk
     PARSE_FCN = _generate_examples  # handle to parse function from file paths to RLDS episodes
 
+    def _detect_image_shape(self) -> tuple[int, int, int]:
+        """Detect image shape from the first image in the first HDF5 file.
+
+        Returns:
+            Tuple of (height, width, channels) for the image shape.
+        """
+        # Get the first HDF5 file path
+        hdf5_file = Path(os.getenv("HDF5_FILE_PATH"))
+        if not hdf5_file.exists():
+            raise FileNotFoundError(f"Data file not found: {hdf5_file}")
+
+        # Open the file and get the first image
+        with h5py.File(hdf5_file, "r") as f:
+            if "data" not in f:
+                raise ValueError(f"HDF5 file {hdf5_file} missing 'data' group")
+
+            data_group = f["data"]
+            demo_names = sorted(data_group.keys())
+            if not demo_names:
+                raise ValueError(f"No demos found in {hdf5_file}")
+
+            # Get the first demo
+            first_demo = data_group[demo_names[0]]
+            obs_group = first_demo["obs"]
+
+            # Get shape from base_image
+            if "base_image" not in obs_group:
+                raise ValueError(f"No base_image found in first demo")
+
+            base_image_shape = obs_group["base_image"].shape
+            # Shape is (T, H, W, C), we want (H, W, C)
+            return tuple(base_image_shape[1:])
+
     def _info(self) -> tfds.core.DatasetInfo:
         """Dataset metadata (homepage, citation,...)."""
+        # Detect image shape from first image in dataset
+        image_shape = self._detect_image_shape()
+
         return self.dataset_info_from_configs(
             features=tfds.features.FeaturesDict(
                 {
@@ -189,13 +225,13 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
                             "observation": tfds.features.FeaturesDict(
                                 {
                                     "base_image": tfds.features.Image(
-                                        shape=(224, 224, 3),
+                                        shape=image_shape,
                                         dtype=np.uint8,
                                         encoding_format="jpeg",
                                         doc="Base camera RGB observation.",
                                     ),
                                     "wrist_image": tfds.features.Image(
-                                        shape=(224, 224, 3),
+                                        shape=image_shape,
                                         dtype=np.uint8,
                                         encoding_format="jpeg",
                                         doc="Wrist camera RGB observation.",
