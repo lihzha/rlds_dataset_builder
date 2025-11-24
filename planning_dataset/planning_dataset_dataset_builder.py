@@ -84,7 +84,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                 cube3_pos = np.array(obs_group["cube3_pos"]) if "cube3_pos" in obs_group else None
                 cube3_quat = np.array(obs_group["cube3_quat"]) if "cube3_quat" in obs_group else None
 
-                language_instructions = demo_group["language"]
+                # language_instructions = demo_group["language"]
 
                 # Verify data alignment
                 num_timesteps = len(actions)
@@ -138,8 +138,8 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                             "is_first": i == 0,
                             "is_last": i == (num_timesteps - 1),
                             "is_terminal": i == (num_timesteps - 1),
-                            # "language_instruction": f"demo_{demo_name}",
-                            "language_instruction": np.array(language_instructions).item().decode(),
+                            "language_instruction": "Pick the red cube and place it in the +x direction by 0.5m",
+                            # "language_instruction": np.array(language_instructions).item().decode(),
                         }
                     )
 
@@ -206,7 +206,7 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
 
             # Get shape from base_image
             if "base_image" not in obs_group:
-                raise ValueError(f"No base_image found in first demo")
+                raise ValueError("No base_image found in first demo")
 
             base_image_shape = obs_group["base_image"].shape
             # Shape is (T, H, W, C), we want (H, W, C)
