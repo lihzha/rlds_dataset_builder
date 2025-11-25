@@ -121,9 +121,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
             num_timesteps = len(joint_velocity)
 
             # Verify data alignment
-            if not (
-                len(action_gripper) == len(cartesian_position) == len(obs_gripper) == num_timesteps
-            ):
+            if not (len(action_gripper) == len(cartesian_position) == len(obs_gripper) == num_timesteps):
                 raise ValueError(
                     f"Data misalignment in {traj_folder.name}: "
                     f"joint_velocity={len(joint_velocity)}, action_gripper={len(action_gripper)}, "
@@ -140,34 +138,40 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
         episode = []
         for i in range(num_timesteps):
             # Construct state: cartesian_position (3) + euler_angle (3) + gripper (1) = 7D
-            state = np.concatenate([
-                cartesian_position[i, :3],  # position (x, y, z)
-                cartesian_position[i, 3:6],  # euler angles (rx, ry, rz)
-                obs_gripper[i:i+1],  # gripper position
-            ]).astype(np.float32)
+            state = np.concatenate(
+                [
+                    cartesian_position[i, :3],  # position (x, y, z)
+                    cartesian_position[i, 3:6],  # euler angles (rx, ry, rz)
+                    obs_gripper[i : i + 1],  # gripper position
+                ]
+            ).astype(np.float32)
 
             # Construct action: joint_velocity (7) + gripper (1) = 8D
-            action = np.concatenate([
-                joint_velocity[i],  # (7,)
-                action_gripper[i:i+1],  # (1,)
-            ]).astype(np.float32)
+            action = np.concatenate(
+                [
+                    joint_velocity[i],  # (7,)
+                    action_gripper[i : i + 1],  # (1,)
+                ]
+            ).astype(np.float32)
 
             # Add step to episode
-            episode.append({
-                "observation": {
-                    "exterior_image_1_left": ext1_frames[i],
-                    "wrist_image_left": wrist_frames[i],
-                    "exterior_image_2_left": ext2_frames[i],
-                    "state": state,
-                },
-                "action": action,
-                "discount": 1.0,
-                "reward": float(i == (num_timesteps - 1)),
-                "is_first": i == 0,
-                "is_last": i == (num_timesteps - 1),
-                "is_terminal": i == (num_timesteps - 1),
-                "language_instruction": language_instruction,
-            })
+            episode.append(
+                {
+                    "observation": {
+                        "exterior_image_1_left": ext1_frames[i],
+                        "wrist_image_left": wrist_frames[i],
+                        "exterior_image_2_left": ext2_frames[i],
+                        "state": state,
+                    },
+                    "action": action,
+                    "discount": 1.0,
+                    "reward": float(i == (num_timesteps - 1)),
+                    "is_first": i == 0,
+                    "is_last": i == (num_timesteps - 1),
+                    "is_terminal": i == (num_timesteps - 1),
+                    "language_instruction": language_instruction,
+                }
+            )
 
         # Create output data sample
         sample = {
@@ -213,19 +217,19 @@ class DroidRawDataset(MultiThreadedDatasetBuilder):
                             "observation": tfds.features.FeaturesDict(
                                 {
                                     "exterior_image_1_left": tfds.features.Image(
-                                        shape=(84, 84, 3),
+                                        shape=(224, 224, 3),
                                         dtype=np.uint8,
                                         encoding_format="jpeg",
                                         doc="Exterior camera 1 RGB observation (camera 38872458).",
                                     ),
                                     "wrist_image_left": tfds.features.Image(
-                                        shape=(84, 84, 3),
+                                        shape=(224, 224, 3),
                                         dtype=np.uint8,
                                         encoding_format="jpeg",
                                         doc="Wrist camera RGB observation (camera 10501775).",
                                     ),
                                     "exterior_image_2_left": tfds.features.Image(
-                                        shape=(84, 84, 3),
+                                        shape=(224, 224, 3),
                                         dtype=np.uint8,
                                         encoding_format="jpeg",
                                         doc="Exterior camera 2 RGB observation (camera 31177322).",
@@ -288,8 +292,7 @@ class DroidRawDataset(MultiThreadedDatasetBuilder):
 
         if not trajectory_folders:
             raise FileNotFoundError(
-                f"No trajectory folders found in {traj_root}\n"
-                f"Expected folders with trajectory.h5 files."
+                f"No trajectory folders found in {traj_root}\nExpected folders with trajectory.h5 files."
             )
 
         print(f"Found {len(trajectory_folders)} trajectory folders in {traj_root}")
