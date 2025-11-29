@@ -1,34 +1,32 @@
+from collections.abc import Callable, Iterable
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import as_completed
 import itertools
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Any, Callable, Dict, Iterable, Tuple, Union
+from typing import Any, Union
 
 import numpy as np
 import tensorflow_datasets as tfds
-from tensorflow_datasets.core import (
-    dataset_builder,
-    download,
-    example_serializer,
-    file_adapters,
-    naming,
-    utils,
-)
+from tensorflow_datasets.core import dataset_builder
+from tensorflow_datasets.core import download
+from tensorflow_datasets.core import example_serializer
+from tensorflow_datasets.core import file_adapters
+from tensorflow_datasets.core import naming
 from tensorflow_datasets.core import split_builder as split_builder_lib
 from tensorflow_datasets.core import splits as splits_lib
+from tensorflow_datasets.core import utils
 from tensorflow_datasets.core import writer as writer_lib
 
 Key = Union[str, int]
 # The nested example dict passed to `features.encode_example`
-Example = Dict[str, Any]
-KeyExample = Tuple[Key, Example]
+Example = dict[str, Any]
+KeyExample = tuple[Key, Example]
 
 
 class MultiThreadedDatasetBuilder(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
-    N_WORKERS = 10  # number of parallel workers for data conversion
-    MAX_PATHS_IN_MEMORY = (
-        100  # number of paths converted & stored in memory before writing to disk
-    )
+    N_WORKERS = 1  # number of parallel workers for data conversion
+    MAX_PATHS_IN_MEMORY = 100  # number of paths converted & stored in memory before writing to disk
     # -> the higher the faster / more parallel conversion, adjust based on avilable RAM
     # note that one path may yield multiple episodes and adjust accordingly
     PARSE_FCN = None  # needs to be filled with path-to-record-episode parse function
@@ -36,10 +34,7 @@ class MultiThreadedDatasetBuilder(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         split_paths = self._split_paths()
-        return {
-            split: type(self).PARSE_FCN(paths=split_paths[split])
-            for split in split_paths
-        }
+        return {split: type(self).PARSE_FCN(paths=split_paths[split]) for split in split_paths}
 
     def _generate_examples(self):
         pass  # this is implemented in global method to enable multiprocessing
@@ -74,9 +69,7 @@ class MultiThreadedDatasetBuilder(tfds.core.GeneratorBasedBuilder):
         dataset_builder._check_split_names(split_generators.keys())
 
         # Start generating data for all splits
-        path_suffix = file_adapters.ADAPTER_FOR_FORMAT[
-            self.info.file_format
-        ].FILE_SUFFIX
+        path_suffix = file_adapters.ADAPTER_FOR_FORMAT[self.info.file_format].FILE_SUFFIX
 
         split_info_futures = []
         for split_name, generator in utils.tqdm(
@@ -117,9 +110,7 @@ class _SplitInfoFuture:
         return self._callback()
 
 
-def parse_examples_from_generator(
-    paths, fcn, split_name, total_num_examples, features, serializer
-):
+def parse_examples_from_generator(paths, fcn, split_name, total_num_examples, features, serializer):
     generator = fcn(paths)
     outputs = []
     for sample in utils.tqdm(
@@ -209,20 +200,14 @@ class ParallelSplitBuilder(split_builder_lib.SplitBuilder):
                 writer._num_examples += 1
         else:
             # Use ProcessPoolExecutor with spawn for parallel processing
-            path_lists = chunk_max(
-                paths, self._n_workers, self._max_paths_in_memory
-            )  # generate N file lists
-            print(
-                f"Generating with {self._n_workers} workers using ProcessPoolExecutor!"
-            )
+            path_lists = chunk_max(paths, self._n_workers, self._max_paths_in_memory)  # generate N file lists
+            print(f"Generating with {self._n_workers} workers using ProcessPoolExecutor!")
 
             import multiprocessing
 
             ctx = multiprocessing.get_context("spawn")
 
-            with ProcessPoolExecutor(
-                max_workers=self._n_workers, mp_context=ctx
-            ) as executor:
+            with ProcessPoolExecutor(max_workers=self._n_workers, mp_context=ctx) as executor:
                 for i, paths_chunk in enumerate(path_lists):
                     print(f"Processing chunk {i + 1} of {len(path_lists)}.")
 
@@ -270,7 +255,7 @@ def chunks(l, n):
     """Yield n number of sequential chunks from l."""
     d, r = divmod(len(l), n)
     for i in range(n):
-        si = (d + 1) * (i if i < r else r) + d * (0 if i < r else i - r)
+        si = (d + 1) * (min(r, i)) + d * (0 if i < r else i - r)
         yield l[si : si + (d + 1 if i < r else d)]
 
 
