@@ -175,7 +175,7 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
     RELEASE_NOTES = {
         "1.0.0": "Initial release.",
     }
-    N_WORKERS = 10  # number of parallel workers for data conversion
+    N_WORKERS = 1  # number of parallel workers for data conversion
     MAX_PATHS_IN_MEMORY = 50  # number of paths converted & stored in memory before writing to disk
     PARSE_FCN = _generate_examples  # handle to parse function from file paths to RLDS episodes
 
