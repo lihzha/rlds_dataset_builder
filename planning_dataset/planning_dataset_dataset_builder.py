@@ -175,7 +175,7 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
     RELEASE_NOTES = {
         "1.0.0": "Initial release.",
     }
-    N_WORKERS = 1  # number of parallel workers for data conversion
+    N_WORKERS = 10  # number of parallel workers for data conversion
     MAX_PATHS_IN_MEMORY = 50  # number of paths converted & stored in memory before writing to disk
     PARSE_FCN = _generate_examples  # handle to parse function from file paths to RLDS episodes
 
@@ -190,6 +190,7 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
         if not hdf5_file.exists():
             raise FileNotFoundError(f"Data file not found: {hdf5_file}")
 
+        has_overview = False
         # Open the file and get the first image
         with h5py.File(hdf5_file, "r") as f:
             if "data" not in f:
@@ -208,63 +209,75 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
             if "base_image" not in obs_group:
                 raise ValueError("No base_image found in first demo")
 
+            if "overview_image" in obs_group:
+                has_overview = True
+
             base_image_shape = obs_group["base_image"].shape
             # Shape is (T, H, W, C), we want (H, W, C)
-            return tuple(base_image_shape[1:])
+            return tuple(base_image_shape[1:]), has_overview
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Dataset metadata (homepage, citation,...)."""
         # Detect image shape from first image in dataset
-        image_shape = self._detect_image_shape()
+        image_shape, has_overview = self._detect_image_shape()
+
+        steps = tfds.features.Dataset(
+            {
+                "observation": tfds.features.FeaturesDict(
+                    {
+                        "base_image": tfds.features.Image(
+                            shape=image_shape,
+                            dtype=np.uint8,
+                            encoding_format="jpeg",
+                            doc="Base camera RGB observation.",
+                        ),
+                        "wrist_image": tfds.features.Image(
+                            shape=image_shape,
+                            dtype=np.uint8,
+                            encoding_format="jpeg",
+                            doc="Wrist camera RGB observation.",
+                        ),
+                        "state": tfds.features.Tensor(
+                            shape=(11,),
+                            dtype=np.float32,
+                            doc="Robot state, consists of [base_pose (3), arm_pos (3), arm_quat (4), gripper_pos (1)].",
+                        ),
+                    }
+                ),
+                "action": tfds.features.Tensor(
+                    shape=(10,),
+                    dtype=np.float32,
+                    doc="Robot action, 10-dimensional action vector.",
+                ),
+                "discount": tfds.features.Scalar(
+                    dtype=np.float32,
+                    doc="Discount if provided, default to 1.",
+                ),
+                "reward": tfds.features.Scalar(
+                    dtype=np.float32,
+                    doc="Reward if provided, 1 on final step for demos.",
+                ),
+                "is_first": tfds.features.Scalar(dtype=np.bool_, doc="True on first step of the episode."),
+                "is_last": tfds.features.Scalar(dtype=np.bool_, doc="True on last step of the episode."),
+                "is_terminal": tfds.features.Scalar(
+                    dtype=np.bool_,
+                    doc="True on last step of the episode if it is a terminal step, True for demos.",
+                ),
+                "language_instruction": tfds.features.Text(doc="Language Instruction."),
+            }
+        )
+        if has_overview:
+            steps["observation"]["overview_image"] = tfds.features.Image(
+                shape=image_shape,
+                dtype=np.uint8,
+                encoding_format="jpeg",
+                doc="Overview camera RGB observation.",
+            )
 
         return self.dataset_info_from_configs(
             features=tfds.features.FeaturesDict(
                 {
-                    "steps": tfds.features.Dataset(
-                        {
-                            "observation": tfds.features.FeaturesDict(
-                                {
-                                    "base_image": tfds.features.Image(
-                                        shape=image_shape,
-                                        dtype=np.uint8,
-                                        encoding_format="jpeg",
-                                        doc="Base camera RGB observation.",
-                                    ),
-                                    "wrist_image": tfds.features.Image(
-                                        shape=image_shape,
-                                        dtype=np.uint8,
-                                        encoding_format="jpeg",
-                                        doc="Wrist camera RGB observation.",
-                                    ),
-                                    "state": tfds.features.Tensor(
-                                        shape=(11,),
-                                        dtype=np.float32,
-                                        doc="Robot state, consists of [base_pose (3), arm_pos (3), arm_quat (4), gripper_pos (1)].",
-                                    ),
-                                }
-                            ),
-                            "action": tfds.features.Tensor(
-                                shape=(10,),
-                                dtype=np.float32,
-                                doc="Robot action, 10-dimensional action vector.",
-                            ),
-                            "discount": tfds.features.Scalar(
-                                dtype=np.float32,
-                                doc="Discount if provided, default to 1.",
-                            ),
-                            "reward": tfds.features.Scalar(
-                                dtype=np.float32,
-                                doc="Reward if provided, 1 on final step for demos.",
-                            ),
-                            "is_first": tfds.features.Scalar(dtype=np.bool_, doc="True on first step of the episode."),
-                            "is_last": tfds.features.Scalar(dtype=np.bool_, doc="True on last step of the episode."),
-                            "is_terminal": tfds.features.Scalar(
-                                dtype=np.bool_,
-                                doc="True on last step of the episode if it is a terminal step, True for demos.",
-                            ),
-                            "language_instruction": tfds.features.Text(doc="Language Instruction."),
-                        }
-                    ),
+                    "steps": steps,
                     "episode_metadata": tfds.features.FeaturesDict(
                         {
                             "file_path": tfds.features.Text(doc="Path to the original HDF5 file."),
