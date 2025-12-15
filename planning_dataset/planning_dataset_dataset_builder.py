@@ -221,51 +221,49 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
         # Detect image shape from first image in dataset
         image_shape, has_overview = self._detect_image_shape()
 
-        steps = tfds.features.Dataset(
-            {
-                "observation": tfds.features.FeaturesDict(
-                    {
-                        "base_image": tfds.features.Image(
-                            shape=image_shape,
-                            dtype=np.uint8,
-                            encoding_format="jpeg",
-                            doc="Base camera RGB observation.",
-                        ),
-                        "wrist_image": tfds.features.Image(
-                            shape=image_shape,
-                            dtype=np.uint8,
-                            encoding_format="jpeg",
-                            doc="Wrist camera RGB observation.",
-                        ),
-                        "state": tfds.features.Tensor(
-                            shape=(11,),
-                            dtype=np.float32,
-                            doc="Robot state, consists of [base_pose (3), arm_pos (3), arm_quat (4), gripper_pos (1)].",
-                        ),
-                    }
-                ),
-                "action": tfds.features.Tensor(
-                    shape=(10,),
-                    dtype=np.float32,
-                    doc="Robot action, 10-dimensional action vector.",
-                ),
-                "discount": tfds.features.Scalar(
-                    dtype=np.float32,
-                    doc="Discount if provided, default to 1.",
-                ),
-                "reward": tfds.features.Scalar(
-                    dtype=np.float32,
-                    doc="Reward if provided, 1 on final step for demos.",
-                ),
-                "is_first": tfds.features.Scalar(dtype=np.bool_, doc="True on first step of the episode."),
-                "is_last": tfds.features.Scalar(dtype=np.bool_, doc="True on last step of the episode."),
-                "is_terminal": tfds.features.Scalar(
-                    dtype=np.bool_,
-                    doc="True on last step of the episode if it is a terminal step, True for demos.",
-                ),
-                "language_instruction": tfds.features.Text(doc="Language Instruction."),
-            }
-        )
+        steps = {
+            "observation": tfds.features.FeaturesDict(
+                {
+                    "base_image": tfds.features.Image(
+                        shape=image_shape,
+                        dtype=np.uint8,
+                        encoding_format="jpeg",
+                        doc="Base camera RGB observation.",
+                    ),
+                    "wrist_image": tfds.features.Image(
+                        shape=image_shape,
+                        dtype=np.uint8,
+                        encoding_format="jpeg",
+                        doc="Wrist camera RGB observation.",
+                    ),
+                    "state": tfds.features.Tensor(
+                        shape=(11,),
+                        dtype=np.float32,
+                        doc="Robot state, consists of [base_pose (3), arm_pos (3), arm_quat (4), gripper_pos (1)].",
+                    ),
+                }
+            ),
+            "action": tfds.features.Tensor(
+                shape=(10,),
+                dtype=np.float32,
+                doc="Robot action, 10-dimensional action vector.",
+            ),
+            "discount": tfds.features.Scalar(
+                dtype=np.float32,
+                doc="Discount if provided, default to 1.",
+            ),
+            "reward": tfds.features.Scalar(
+                dtype=np.float32,
+                doc="Reward if provided, 1 on final step for demos.",
+            ),
+            "is_first": tfds.features.Scalar(dtype=np.bool_, doc="True on first step of the episode."),
+            "is_last": tfds.features.Scalar(dtype=np.bool_, doc="True on last step of the episode."),
+            "is_terminal": tfds.features.Scalar(
+                dtype=np.bool_,
+                doc="True on last step of the episode if it is a terminal step, True for demos.",
+            ),
+            "language_instruction": tfds.features.Text(doc="Language Instruction."),
+        }
         if has_overview:
             steps["observation"]["overview_image"] = tfds.features.Image(
                 shape=image_shape,
@@ -277,7 +275,7 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
         return self.dataset_info_from_configs(
             features=tfds.features.FeaturesDict(
                 {
-                    "steps": steps,
+                    "steps": tfds.features.Dataset(steps),
                     "episode_metadata": tfds.features.FeaturesDict(
                         {
                             "file_path": tfds.features.Text(doc="Path to the original HDF5 file."),
