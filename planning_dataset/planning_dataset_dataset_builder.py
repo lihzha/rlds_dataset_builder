@@ -221,28 +221,35 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
         # Detect image shape from first image in dataset
         image_shape, has_overview = self._detect_image_shape()
 
-        steps = {
-            "observation": tfds.features.FeaturesDict(
-                {
-                    "base_image": tfds.features.Image(
-                        shape=image_shape,
-                        dtype=np.uint8,
-                        encoding_format="jpeg",
-                        doc="Base camera RGB observation.",
-                    ),
-                    "wrist_image": tfds.features.Image(
-                        shape=image_shape,
-                        dtype=np.uint8,
-                        encoding_format="jpeg",
-                        doc="Wrist camera RGB observation.",
-                    ),
-                    "state": tfds.features.Tensor(
-                        shape=(11,),
-                        dtype=np.float32,
-                        doc="Robot state, consists of [base_pose (3), arm_pos (3), arm_quat (4), gripper_pos (1)].",
-                    ),
-                }
+        observation = {
+            "base_image": tfds.features.Image(
+                shape=image_shape,
+                dtype=np.uint8,
+                encoding_format="jpeg",
+                doc="Base camera RGB observation.",
             ),
+            "wrist_image": tfds.features.Image(
+                shape=image_shape,
+                dtype=np.uint8,
+                encoding_format="jpeg",
+                doc="Wrist camera RGB observation.",
+            ),
+            "state": tfds.features.Tensor(
+                shape=(11,),
+                dtype=np.float32,
+                doc="Robot state, consists of [base_pose (3), arm_pos (3), arm_quat (4), gripper_pos (1)].",
+            ),
+        }
+        if has_overview:
+            observation["overview_image"] = tfds.features.Image(
+                shape=image_shape,
+                dtype=np.uint8,
+                encoding_format="jpeg",
+                doc="Overview camera RGB observation.",
+            )
+
+        steps = {
+            "observation": tfds.features.FeaturesDict(observation),
             "action": tfds.features.Tensor(
                 shape=(10,),
                 dtype=np.float32,
@@ -264,13 +271,6 @@ class PlanningDataset(MultiThreadedDatasetBuilder):
             ),
             "language_instruction": tfds.features.Text(doc="Language Instruction."),
         }
-        if has_overview:
-            steps["observation"]["overview_image"] = tfds.features.Image(
-                shape=image_shape,
-                dtype=np.uint8,
-                encoding_format="jpeg",
-                doc="Overview camera RGB observation.",
-            )
 
         return self.dataset_info_from_configs(
             features=tfds.features.FeaturesDict(
