@@ -74,6 +74,8 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                 gripper_pos = np.array(obs_group["gripper_pos"])  # shape (T, 1)
                 base_image = np.array(obs_group["base_image"])  # shape (T, 84, 84, 3)
                 wrist_image = np.array(obs_group["wrist_image"])  # shape (T, 84, 84, 3)
+                if "overview_image" in obs_group:
+                    overview_image = np.array(obs_group["overview_image"])  # shape (T, 84, 84, 3)
 
                 # Optional: Load object poses (cubes, base_pose) for metadata
                 base_pose = np.array(obs_group["base_pose"]) if "base_pose" in obs_group else None
@@ -123,15 +125,17 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                         action_vector = np.concatenate(
                             [action_vector[:6], _quat_to_axis_angle(action_vector[6:10]), action_vector[10:]], axis=-1
                         )
-
+                    observation_dict = {
+                        "base_image": base_image[i].astype(np.uint8),
+                        "wrist_image": wrist_image[i].astype(np.uint8),
+                        "state": state,
+                    }
+                    if "overview_image" in obs_group:
+                        observation_dict["overview_image"] = overview_image[i].astype(np.uint8)
                     # Add step to episode
                     episode.append(
                         {
-                            "observation": {
-                                "base_image": base_image[i].astype(np.uint8),
-                                "wrist_image": wrist_image[i].astype(np.uint8),
-                                "state": state,
-                            },
+                            "observation": observation_dict,
                             "action": action_vector,
                             "discount": 1.0,
                             "reward": float(i == (num_timesteps - 1)),
