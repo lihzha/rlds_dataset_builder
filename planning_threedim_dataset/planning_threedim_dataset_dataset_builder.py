@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 import tensorflow_datasets as tfds
 
-from planning_twod_dataset.conversion_utils import MultiThreadedDatasetBuilder
+from planning_threedim_dataset.conversion_utils import MultiThreadedDatasetBuilder
 
 
 def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
@@ -15,10 +15,15 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
 
     Each path should point to an HDF5 file containing multiple demos.
     HDF5 structure:
-        /data/demo_0/actions  shape=(T, 5)
-        /data/demo_0/obs/image  shape=(T, 224, 224, 3)
-        /data/demo_0/obs/robot_state  shape=(T, 9)
-        /data/demo_0/obs/env_state  shape=(T, 10)
+        /data/demo_0/actions  shape=(T, 10)
+        /data/demo_0/obs/arm_pos  shape=(T, 3)
+        /data/demo_0/obs/arm_quat  shape=(T, 4)
+        /data/demo_0/obs/base_image  shape=(T, 84, 84, 3)
+        /data/demo_0/obs/wrist_image  shape=(T, 84, 84, 3)
+        /data/demo_0/obs/gripper_pos  shape=(T, 1)
+        /data/demo_0/obs/base_pose  shape=(T, 3)
+        /data/demo_0/obs/cube{1,2,3}_pos  shape=(T, 3)
+        /data/demo_0/obs/cube{1,2,3}_quat  shape=(T, 4)
     """
 
     def _parse_hdf5_file(hdf5_path):
@@ -44,53 +49,39 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                 demo_group = data_group[demo_name]
 
                 # Load actions
-                actions = np.array(demo_group["actions"])  # shape (T, 5)
+                actions = np.array(demo_group["actions"])  # shape (T, 10)
 
                 # Load observations
                 obs_group = demo_group["obs"]
-                image = np.array(obs_group["image"])  # shape (T, 224, 224, 3)
-                robot_state = np.array(obs_group["robot_state"])  # shape (T, 9)
-                env_state = np.array(obs_group["env_state"])  # shape (T, 10)
+                robot_state = np.array(obs_group["robot_state"])  # shape (T, 19)
+                base_image = np.array(obs_group["base_image"])  # shape (T, 84, 84, 3)
+                wrist_image = np.array(obs_group["wrist_image"])  # shape (T, 84, 84, 3)
+                if "overview_image" in obs_group:
+                    overview_image = np.array(obs_group["overview_image"])  # shape (T, 84, 84, 3)
 
-                language_instructions = demo_group["language"] if "language" in demo_group else None
+                language_instructions = demo_group["language"]
 
                 # Verify data alignment
                 num_timesteps = len(actions)
-                if not (
-                    len(image)
-                    == len(robot_state)
-                    == len(env_state)
-                    == num_timesteps
-                ):
+                if not (len(base_image) == len(wrist_image) == num_timesteps):
                     raise ValueError(
                         f"Data misalignment in {hdf5_path}/{demo_name}: "
-                        f"image={len(image)}, robot_state={len(robot_state)}, "
-                        f"env_state={len(env_state)}, actions={num_timesteps}"
+                        f"robot_state={len(robot_state)}, "
+                        f"base_image={len(base_image)}, wrist_image={len(wrist_image)}"
                     )
 
                 # Build episode steps
                 episode = []
                 for i in range(num_timesteps):
-                    # Actions are 5-dimensional
+                    # Actions are 10-dimensional, we'll store them as-is
                     action_vector = actions[i].astype(np.float32)
                     observation_dict = {
-                        "base_image": image[i].astype(np.uint8),
+                        "base_image": base_image[i].astype(np.uint8),
+                        "wrist_image": wrist_image[i].astype(np.uint8),
                         "state": robot_state[i].astype(np.float32),
                     }
-                    # print(action_vector)
-
-                    # # Get language instruction if available
-                    # if language_instructions is not None:
-                    #     lang_instr = np.array(language_instructions).item()
-                    #     if isinstance(lang_instr, bytes):
-                    #         lang_instr = lang_instr.decode()
-                    # else:
-                    #     lang_instr = ""
-                    # lang_instr = "Reach the goal."
-                    lang_instr = "Use the stick to touch all buttons."
-                    # lang_instr = "Place a target block onto a target surface."
-                    # lang_instr = "Use a hook to move a target block onto a middle wall"
-
+                    if "overview_image" in obs_group:
+                        observation_dict["overview_image"] = overview_image[i].astype(np.uint8)
                     # Add step to episode
                     episode.append(
                         {
@@ -101,7 +92,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                             "is_first": i == 0,
                             "is_last": i == (num_timesteps - 1),
                             "is_terminal": i == (num_timesteps - 1),
-                            "language_instruction": lang_instr,
+                            "language_instruction": np.array(language_instructions).item().decode(),
                         }
                     )
 
@@ -130,7 +121,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
             continue
 
 
-class PlanningTwodDataset(MultiThreadedDatasetBuilder):
+class PlanningThreedimDataset(MultiThreadedDatasetBuilder):
     """DatasetBuilder for planning dataset from HDF5 files."""
 
     VERSION = tfds.core.Version("1.0.0")
@@ -141,18 +132,19 @@ class PlanningTwodDataset(MultiThreadedDatasetBuilder):
     MAX_PATHS_IN_MEMORY = 50  # number of paths converted & stored in memory before writing to disk
     PARSE_FCN = _generate_examples  # handle to parse function from file paths to RLDS episodes
 
-    def _detect_image_shape(self) -> tuple[int, int, int]:
-        """Detect image shape from the first image in the first HDF5 file.
+    def _detect_shapes(self) -> dict:
+        """Detect image and robot_state shapes from the first HDF5 file.
 
         Returns:
-            Tuple of (height, width, channels) for the image shape.
+            Dict with 'image_shape', 'robot_state_dim', and 'has_overview'.
         """
         # Get the first HDF5 file path
         hdf5_file = Path(os.getenv("HDF5_FILE_PATH"))
         if not hdf5_file.exists():
             raise FileNotFoundError(f"Data file not found: {hdf5_file}")
 
-        # Open the file and get the first image
+        has_overview = False
+        # Open the file and get the shapes
         with h5py.File(hdf5_file, "r") as f:
             if "data" not in f:
                 raise ValueError(f"HDF5 file {hdf5_file} missing 'data' group")
@@ -166,40 +158,72 @@ class PlanningTwodDataset(MultiThreadedDatasetBuilder):
             first_demo = data_group[demo_names[0]]
             obs_group = first_demo["obs"]
 
-            # Get shape from image
-            if "image" not in obs_group:
-                raise ValueError("No image found in first demo")
+            # Get shape from base_image
+            if "base_image" not in obs_group:
+                raise ValueError("No base_image found in first demo")
 
-            image_shape = obs_group["image"].shape
+            if "overview_image" in obs_group:
+                has_overview = True
+
+            base_image_shape = obs_group["base_image"].shape
             # Shape is (T, H, W, C), we want (H, W, C)
-            return tuple(image_shape[1:])
+            image_shape = tuple(base_image_shape[1:])
+
+            # Detect robot_state dimension
+            if "robot_state" not in obs_group:
+                raise ValueError("No robot_state found in first demo")
+
+            robot_state_shape = obs_group["robot_state"].shape
+            # Shape is (T, D), we want D
+            robot_state_dim = robot_state_shape[1]
+
+            return {
+                "image_shape": image_shape,
+                "robot_state_dim": robot_state_dim,
+                "has_overview": has_overview,
+            }
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Dataset metadata (homepage, citation,...)."""
-        # Detect image shape from first image in dataset
-        image_shape = self._detect_image_shape()
+        # Detect shapes from first demo in dataset
+        shapes = self._detect_shapes()
+        image_shape = shapes["image_shape"]
+        robot_state_dim = shapes["robot_state_dim"]
+        has_overview = shapes["has_overview"]
 
         observation = {
             "base_image": tfds.features.Image(
                 shape=image_shape,
                 dtype=np.uint8,
                 encoding_format="jpeg",
-                doc="Camera RGB observation.",
+                doc="Base camera RGB observation.",
+            ),
+            "wrist_image": tfds.features.Image(
+                shape=image_shape,
+                dtype=np.uint8,
+                encoding_format="jpeg",
+                doc="Wrist camera RGB observation.",
             ),
             "state": tfds.features.Tensor(
-                shape=(9,),
+                shape=(robot_state_dim,),
                 dtype=np.float32,
-                doc="Robot state, 9-dimensional.",
+                doc=f"Robot state, {robot_state_dim}-dimensional state vector.",
             ),
-
         }
+        if has_overview:
+            observation["overview_image"] = tfds.features.Image(
+                shape=image_shape,
+                dtype=np.uint8,
+                encoding_format="jpeg",
+                doc="Overview camera RGB observation.",
+            )
 
         steps = {
             "observation": tfds.features.FeaturesDict(observation),
             "action": tfds.features.Tensor(
-                shape=(5,),
+                shape=(11,),
                 dtype=np.float32,
-                doc="Robot action, 5-dimensional action vector.",
+                doc="Robot action, 10-dimensional action vector.",
             ),
             "discount": tfds.features.Scalar(
                 dtype=np.float32,
