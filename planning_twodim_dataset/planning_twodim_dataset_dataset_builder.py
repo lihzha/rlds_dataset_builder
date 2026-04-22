@@ -146,18 +146,16 @@ class PlanningTwodimDataset(MultiThreadedDatasetBuilder):
     MAX_PATHS_IN_MEMORY = 50  # number of paths converted & stored in memory before writing to disk
     PARSE_FCN = _generate_examples  # handle to parse function from file paths to RLDS episodes
 
-    def _detect_image_shape(self) -> tuple[int, int, int]:
-        """Detect image shape from the first image in the first HDF5 file.
+    def _detect_shapes(self) -> dict:
+        """Detect image, robot_state, and action shapes from the first HDF5 file.
 
         Returns:
-            Tuple of (height, width, channels) for the image shape.
+            Dict with 'image_shape', 'robot_state_dim', and 'action_dim'.
         """
-        # Get the first HDF5 file path
         hdf5_file = Path(os.getenv("HDF5_FILE_PATH"))
         if not hdf5_file.exists():
             raise FileNotFoundError(f"Data file not found: {hdf5_file}")
 
-        # Open the file and get the first image
         with h5py.File(hdf5_file, "r") as f:
             if "data" not in f:
                 raise ValueError(f"HDF5 file {hdf5_file} missing 'data' group")
@@ -167,22 +165,33 @@ class PlanningTwodimDataset(MultiThreadedDatasetBuilder):
             if not demo_names:
                 raise ValueError(f"No demos found in {hdf5_file}")
 
-            # Get the first demo
             first_demo = data_group[demo_names[0]]
             obs_group = first_demo["obs"]
 
-            # Get shape from image
             if "image" not in obs_group:
                 raise ValueError("No image found in first demo")
+            image_shape = tuple(obs_group["image"].shape[1:])
 
-            image_shape = obs_group["image"].shape
-            # Shape is (T, H, W, C), we want (H, W, C)
-            return tuple(image_shape[1:])
+            if "robot_state" not in obs_group:
+                raise ValueError("No robot_state found in first demo")
+            robot_state_dim = obs_group["robot_state"].shape[1]
+
+            if "actions" not in first_demo:
+                raise ValueError("No actions found in first demo")
+            action_dim = first_demo["actions"].shape[1]
+
+            return {
+                "image_shape": image_shape,
+                "robot_state_dim": robot_state_dim,
+                "action_dim": action_dim,
+            }
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Dataset metadata (homepage, citation,...)."""
-        # Detect image shape from first image in dataset
-        image_shape = self._detect_image_shape()
+        shapes = self._detect_shapes()
+        image_shape = shapes["image_shape"]
+        robot_state_dim = shapes["robot_state_dim"]
+        action_dim = shapes["action_dim"]
 
         observation = {
             "base_image": tfds.features.Image(
@@ -192,18 +201,18 @@ class PlanningTwodimDataset(MultiThreadedDatasetBuilder):
                 doc="Camera RGB observation.",
             ),
             "state": tfds.features.Tensor(
-                shape=(9,),
+                shape=(robot_state_dim,),
                 dtype=np.float32,
-                doc="Robot state, 9-dimensional.",
+                doc=f"Robot state, {robot_state_dim}-dimensional.",
             ),
         }
 
         steps = {
             "observation": tfds.features.FeaturesDict(observation),
             "action": tfds.features.Tensor(
-                shape=(5,),
+                shape=(action_dim,),
                 dtype=np.float32,
-                doc="Robot action, 5-dimensional action vector.",
+                doc=f"Robot action, {action_dim}-dimensional action vector.",
             ),
             "discount": tfds.features.Scalar(
                 dtype=np.float32,

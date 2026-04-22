@@ -200,9 +200,13 @@ class PlanningThreedimDataset(MultiThreadedDatasetBuilder):
             # Shape is (T, D), we want D
             robot_state_dim = robot_state_shape[1]
 
+            actions_shape = first_demo["actions"].shape
+            action_dim = actions_shape[1]
+
             return {
                 "image_shape": image_shape,
                 "robot_state_dim": robot_state_dim,
+                "action_dim": action_dim,
                 "has_overview": has_overview,
             }
 
@@ -212,6 +216,7 @@ class PlanningThreedimDataset(MultiThreadedDatasetBuilder):
         shapes = self._detect_shapes()
         image_shape = shapes["image_shape"]
         robot_state_dim = shapes["robot_state_dim"]
+        action_dim = shapes["action_dim"]
         has_overview = shapes["has_overview"]
 
         observation = {
@@ -244,9 +249,9 @@ class PlanningThreedimDataset(MultiThreadedDatasetBuilder):
         steps = {
             "observation": tfds.features.FeaturesDict(observation),
             "action": tfds.features.Tensor(
-                shape=(11,),
+                shape=(action_dim,),
                 dtype=np.float32,
-                doc="Robot action, 10-dimensional action vector.",
+                doc=f"Robot action, {action_dim}-dimensional action vector.",
             ),
             "discount": tfds.features.Scalar(
                 dtype=np.float32,
