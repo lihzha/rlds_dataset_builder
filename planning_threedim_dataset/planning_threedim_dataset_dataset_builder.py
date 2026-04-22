@@ -9,6 +9,29 @@ import tensorflow_datasets as tfds
 
 from planning_threedim_dataset.conversion_utils import MultiThreadedDatasetBuilder
 
+_LANGUAGE_INSTRUCTIONS = {
+    "basemotion3d": "Reach the goal",
+    "stickbutton2d": "Use the stick to touch all buttons",
+    "dynobstruction2d": "Place a target block onto a target surface",
+    "dynpushpullhook2d_o5": "Use a hook to move a target block onto a middle wall",
+    "transport3d": "Place all the objects on the table using the box",
+    "shelf3d": "Pick the object and place it on the shelf",
+    "sweep": "Open the drawer and sweep all the objects into the drawer",
+    "motion2d_p0": "Reach the goal",
+}
+
+
+def _get_language_instruction(hdf5_path: Path) -> str:
+    stem = hdf5_path.stem.lower()
+    match = max(
+        (key for key in _LANGUAGE_INSTRUCTIONS if stem.startswith(key)),
+        key=len,
+        default=None,
+    )
+    if match is None:
+        raise ValueError(f"No language instruction found for {hdf5_path.name}")
+    return _LANGUAGE_INSTRUCTIONS[match]
+
 
 def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
     """Yields episodes for list of HDF5 file paths.
@@ -59,7 +82,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                 if "overview_image" in obs_group:
                     overview_image = np.array(obs_group["overview_image"])  # shape (T, 84, 84, 3)
 
-                language_instructions = demo_group["language"]
+                language_instruction = _get_language_instruction(hdf5_path)
 
                 # Verify data alignment
                 num_timesteps = len(actions)
@@ -92,7 +115,7 @@ def _generate_examples(paths) -> Iterator[tuple[str, Any]]:
                             "is_first": i == 0,
                             "is_last": i == (num_timesteps - 1),
                             "is_terminal": i == (num_timesteps - 1),
-                            "language_instruction": np.array(language_instructions).item().decode(),
+                            "language_instruction": language_instruction,
                         }
                     )
 
