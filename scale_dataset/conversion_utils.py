@@ -180,7 +180,7 @@ class ParallelSplitBuilder(split_builder_lib.SplitBuilder):
         # instead of being sorted entirely in memory
         from tensorflow_datasets.core import shuffle
         original_max_mem = shuffle.MAX_MEM_BUFFER_SIZE
-        shuffle.MAX_MEM_BUFFER_SIZE = 50 << 20  # 50MB instead of 1GB
+        shuffle.MAX_MEM_BUFFER_SIZE = 10 << 20  # 10MB instead of 1GB (further reduced for large datasets)
         print(f"Reduced shuffle buffer from {original_max_mem >> 20}MB to {shuffle.MAX_MEM_BUFFER_SIZE >> 20}MB to prevent OOM")
 
         # Call parent init with all required kwargs

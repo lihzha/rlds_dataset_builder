@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --array=0-216%32
 #
 # Job array: one element per task in <BASE>/tasks.json.
@@ -21,27 +21,39 @@
 #   sbatch --array=12,57,103 scripts/agibot/submit_process_array.sbatch
 #
 # Required env:
-#   AGIBOT_BASE                    shared scratch dir
+#   AGIBOT_BASE                    shared scratch dir (proprio_stats/, task_info/, tasks.json live here)
+#   AGIBOT_WORK_BASE               per-job scratch parent (e.g. /n/fs/robot-data/agibot_work)
 #   AGIBOT_GCS_STAGING             gs://bucket/agibot_staging
-#   GOOGLE_APPLICATION_CREDENTIALS path to service-account JSON
+#
+# GCS auth — any one of these is sufficient:
+#   - GOOGLE_APPLICATION_CREDENTIALS pointing to a service-account JSON, OR
+#   - Application Default Credentials at ~/.config/gcloud/application_default_credentials.json
+#     (from `gcloud auth application-default login` on a login node — persists across jobs).
+#   If `gsutil cp gs://your-bucket/...` works on a login node, ADC is already set up.
 
 set -euo pipefail
 
+# Fix SSL certificate path for libcurl/TensorFlow GCS access
+export CURL_CA_BUNDLE=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+export SSL_CERT_FILE=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+export REQUESTS_CA_BUNDLE=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+
+export AGIBOT_BASE=/n/fs/robot-data/data/agibot
+export AGIBOT_WORK_BASE=/n/fs/robot-data/agibot_work
+export AGIBOT_GCS_STAGING=gs://pi0-cot/agibot_staging
+
 : "${AGIBOT_BASE:?Set AGIBOT_BASE}"
+: "${AGIBOT_WORK_BASE:?Set AGIBOT_WORK_BASE (e.g. /n/fs/robot-data/agibot_work)}"
 : "${AGIBOT_GCS_STAGING:?Set AGIBOT_GCS_STAGING (gs://...)}"
-: "${GOOGLE_APPLICATION_CREDENTIALS:?Set GOOGLE_APPLICATION_CREDENTIALS}"
+
 
 mkdir -p logs
 
-if [ -n "${CONDA_PREFIX:-}" ]; then
-    echo "Using already-active conda env: $CONDA_PREFIX"
-else
-    source "${CONDA_BASE:-$HOME/miniconda3}/etc/profile.d/conda.sh"
-    conda activate "${CONDA_ENV:-rlds}"
-fi
+source /n/fs/robot-data/miniconda3/etc/profile.d/conda.sh
+conda activate rlds_zarr3
 
-cd "$(dirname "$0")/../.."
-export PYTHONPATH="$(pwd):${PYTHONPATH:-}"
+# Add project root to PYTHONPATH so agibot_pipeline can be imported
+export PYTHONPATH="/n/fs/robot-data/rlds_multithread:${PYTHONPATH:-}"
 
 # Map array index -> task_id from tasks.json.
 TASK_ID=$(python -c "
@@ -54,10 +66,9 @@ if idx >= len(tasks):
 print(tasks[idx]['task_id'])
 ")
 
-# Per-job local scratch. SLURM_TMPDIR is node-local on most clusters; fall back
-# to /tmp/<jobid> if it's unset (so we still get isolation between jobs).
-WORK_BASE="${SLURM_TMPDIR:-/tmp}"
-WORK_DIR="$WORK_BASE/agibot_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+# Per-job scratch under the cluster-permitted path (e.g. /n/fs/robot-data/...).
+# Each array element gets a uniquely-named subdir so concurrent jobs are isolated.
+WORK_DIR="$AGIBOT_WORK_BASE/agibot_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
 mkdir -p "$WORK_DIR"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -67,7 +78,7 @@ echo "Node: $(hostname)   Work dir: $WORK_DIR"
 echo "Start: $(date)"
 echo "=================================================="
 
-python -m agibot_pipeline.process_task \
+python /n/fs/robot-data/rlds_multithread/agibot_pipeline/process_task.py \
     --task-id "$TASK_ID" \
     --base "$AGIBOT_BASE" \
     --work-dir "$WORK_DIR" \

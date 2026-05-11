@@ -22,6 +22,7 @@ Usage:
 import argparse
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import tensorflow as tf
@@ -37,13 +38,21 @@ from agibot_pipeline.features import (
 )
 
 
-def list_manifests(gcs_staging: str):
+def list_manifests(gcs_staging: str, max_workers: int = 64):
     pattern = f"{gcs_staging}/manifests/*.json"
     paths = sorted(tf.io.gfile.glob(pattern))
-    out = []
-    for p in paths:
+    print(f"Found {len(paths)} manifests; reading in parallel...", flush=True)
+
+    def _read(p):
         with tf.io.gfile.GFile(p, "r") as f:
-            out.append(json.load(f))
+            return json.load(f)
+
+    out = []
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        for i, m in enumerate(pool.map(_read, paths), 1):
+            out.append(m)
+            if i % 200 == 0 or i == len(paths):
+                print(f"  read {i}/{len(paths)} manifests", flush=True)
     return out
 
 
@@ -108,17 +117,26 @@ def main():
         tf.io.gfile.makedirs(final_dir)
 
     # Move/copy shards. tf.io.gfile.rename across GCS is a server-side copy+delete.
-    print(f"{'Copying' if args.copy else 'Renaming'} shards to final dir...")
-    for i, (src, dst) in enumerate(moves):
+    # Parallelized: each call is a sequential HTTP roundtrip, so threads help.
+    print(f"{'Copying' if args.copy else 'Renaming'} {len(moves)} shards in parallel...")
+
+    def _move_one(pair):
+        src, dst = pair
         if tf.io.gfile.exists(dst):
-            # Idempotency: previous merge run already placed this shard.
-            continue
+            return  # Idempotency: previous merge run already placed this shard.
         if args.copy:
             tf.io.gfile.copy(src, dst, overwrite=False)
         else:
             tf.io.gfile.rename(src, dst, overwrite=False)
-        if (i + 1) % 50 == 0 or (i + 1) == len(moves):
-            print(f"  {i+1}/{len(moves)} done")
+
+    with ThreadPoolExecutor(max_workers=64) as pool:
+        futures = [pool.submit(_move_one, m) for m in moves]
+        done = 0
+        for fut in as_completed(futures):
+            fut.result()
+            done += 1
+            if done % 50 == 0 or done == len(futures):
+                print(f"  {done}/{len(futures)} done", flush=True)
 
     # Build dataset metadata via a real (but data-free) builder, then write it.
     # Instantiating the builder against the final_dir gives DatasetInfo all the
@@ -177,6 +195,15 @@ class _MergeBuilder(tfds.core.GeneratorBasedBuilder):
 
     def _generate_examples(self):
         return iter([])
+
+
+# TFDS resolves a builder's "package directory" from cls.__module__ to load
+# optional metadata files (description.md, citations.bib). When this script is
+# run as __main__ (either via `python merge_shards.py` or `python -m ...`),
+# __module__ becomes "__main__" which TFDS can't resolve. Point it at the real
+# package so resolution lands on agibot_pipeline/ (which has no metadata
+# files — TFDS will iterate it and find none, which is fine).
+_MergeBuilder.__module__ = "agibot_pipeline.merge_shards"
 
 
 if __name__ == "__main__":

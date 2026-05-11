@@ -175,6 +175,14 @@ class ParallelSplitBuilder(split_builder_lib.SplitBuilder):
             from tensorflow_datasets.core import writer as writer_lib
             kwargs['example_writer'] = writer_lib.ExampleWriter(file_format=file_format)
 
+        # CRITICAL FIX: Reduce MAX_MEM_BUFFER_SIZE to force disk-based bucketing
+        # This prevents OOM during shuffling by ensuring examples are written to disk buckets
+        # instead of being sorted entirely in memory
+        from tensorflow_datasets.core import shuffle
+        original_max_mem = shuffle.MAX_MEM_BUFFER_SIZE
+        shuffle.MAX_MEM_BUFFER_SIZE = 10 << 20  # 10MB instead of 1GB (further reduced for large datasets)
+        print(f"Reduced shuffle buffer from {original_max_mem >> 20}MB to {shuffle.MAX_MEM_BUFFER_SIZE >> 20}MB to prevent OOM")
+
         # Call parent init with all required kwargs
         super().__init__(*args, **kwargs)
 

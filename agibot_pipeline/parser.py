@@ -15,6 +15,7 @@ from pathlib import Path
 import json
 from typing import Iterator, Tuple, Any
 
+import av
 import cv2
 import h5py
 import numpy as np
@@ -40,23 +41,29 @@ def quaternion_to_euler(quat: np.ndarray) -> np.ndarray:
 
 
 def _read_video_frames(video_path: Path) -> list:
-    """Decode an mp4 to a list of 224x224 RGB frames using OpenCV."""
+    """Decode an mp4 to a list of 224x224 RGB frames using PyAV.
+
+    PyAV with libdav1d is used instead of OpenCV because the AgiBot videos
+    are encoded in AV1 codec, which OpenCV's bundled FFmpeg may not decode
+    correctly on all systems.
+    """
     if not video_path.exists():
         raise IOError(f"Video file not found: {video_path}")
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        raise IOError(f"Cannot open video file (possibly corrupted): {video_path}")
+    try:
+        container = av.open(str(video_path))
+    except av.error.InvalidDataError as e:
+        raise IOError(f"Cannot open video file (possibly corrupted): {video_path}") from e
+
     frames = []
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    for frame in container.decode(video=0):
+        # Convert to RGB numpy array
+        frame_rgb = frame.to_ndarray(format='rgb24')
+        # Resize to 224x224
         frame_resized = cv2.resize(
             frame_rgb, (224, 224), interpolation=cv2.INTER_LINEAR
         )
         frames.append(frame_resized)
-    cap.release()
+    container.close()
     return frames
 
 

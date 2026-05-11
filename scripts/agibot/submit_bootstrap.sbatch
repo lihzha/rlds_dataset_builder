@@ -2,10 +2,14 @@
 #SBATCH --job-name=agibot_bootstrap
 #SBATCH --output=logs/agibot_bootstrap_%j.out
 #SBATCH --error=logs/agibot_bootstrap_%j.err
-#SBATCH --nodes=1
-#SBATCH --cpus-per-task=8
+#SBATCH -N 1
+#SBATCH --gres=gpu:0
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
 #SBATCH --time=12:00:00
+#SBATCH --partition=all              # Or specify GPU partition if needed
+
 #
 # One-time download of task_info + proprio_stats + manifest generation.
 # Outputs <BASE>/tasks.json which the array job consumes.
@@ -19,24 +23,17 @@
 
 set -euo pipefail
 
+export AGIBOT_BASE=/n/fs/robot-data/data/agibot
+
 : "${AGIBOT_BASE:?Set AGIBOT_BASE to the shared scratch dir}"
 
 mkdir -p logs
 
-# Activate the conda env that has huggingface_hub + tensorflow_datasets.
-# Adjust this block for your cluster.
-if [ -n "${CONDA_PREFIX:-}" ]; then
-    echo "Using already-active conda env: $CONDA_PREFIX"
-else
-    source "${CONDA_BASE:-$HOME/miniconda3}/etc/profile.d/conda.sh"
-    conda activate "${CONDA_ENV:-rlds}"
-fi
-
 cd "$(dirname "$0")/../.."   # repo root
 export PYTHONPATH="$(pwd):${PYTHONPATH:-}"
 
-python -m agibot_pipeline.bootstrap_hf_data \
+python /n/fs/robot-data/rlds_multithread/agibot_pipeline/bootstrap_hf_data.py \
     --base "$AGIBOT_BASE" \
-    --workers 8
+    --workers 16
 
 echo "Bootstrap complete. Manifest: $AGIBOT_BASE/tasks.json"

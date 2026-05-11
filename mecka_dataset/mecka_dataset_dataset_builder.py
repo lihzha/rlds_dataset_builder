@@ -412,7 +412,8 @@ def _generate_examples(paths) -> Iterator[Tuple[str, Any]]:
                         "is_first": i == 0,
                         "is_last": i == (num_frames - 1),
                         "is_terminal": i == (num_frames - 1),
-                        "language_instruction": annotation_text if annotation_text else task_name,
+                        "language_instruction": task_name if task_name else "",
+                        "subtask": annotation_text if annotation_text else "",
                     }
                 )
 
@@ -436,20 +437,24 @@ def _generate_examples(paths) -> Iterator[Tuple[str, Any]]:
         yield from _parse_example(zarr_path)
 
 
-class MeckaDataset(MultiThreadedDatasetBuilder):
-    """DatasetBuilder for Mecka bimanual manipulation dataset."""
+class MeckaDatasetBase(MultiThreadedDatasetBuilder):
+    """Base class for Mecka bimanual manipulation dataset with shared logic."""
 
     VERSION = tfds.core.Version("1.0.0")
     RELEASE_NOTES = {
         "1.0.0": "Initial release.",
     }
-    N_WORKERS = 30  # number of parallel workers (reduced to avoid zarr v3 multiprocessing issues)
+    N_WORKERS = 15  # number of parallel workers (reduced to avoid OOM and zarr v3 multiprocessing issues)
     MAX_PATHS_IN_MEMORY = (
-        100  # number of paths converted & stored in memory before writing to disk
+        15  # number of paths converted & stored in memory before writing to disk
     )
     PARSE_FCN = (
         _generate_examples  # handle to parse function from file paths to RLDS episodes
     )
+
+    # Subclasses should override these to specify which subset to build
+    SUBSET_START_IDX = None  # Starting index (inclusive)
+    SUBSET_END_IDX = None    # Ending index (exclusive)
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Dataset metadata (homepage, citation,...)."""
@@ -562,7 +567,10 @@ class MeckaDataset(MultiThreadedDatasetBuilder):
                                 doc="True on last step of the episode if it is a terminal step, True for demos.",
                             ),
                             "language_instruction": tfds.features.Text(
-                                doc="Language Instruction."
+                                doc="Global task description from metadata (e.g., 'fold clothes')."
+                            ),
+                            "subtask": tfds.features.Text(
+                                doc="Dense annotation for this specific task segment (e.g., 'pick up the shirt'). Empty string if no dense annotations available."
                             ),
                         }
                     ),
@@ -615,7 +623,15 @@ class MeckaDataset(MultiThreadedDatasetBuilder):
                 continue
             zarr_dirs.append(str(d))
 
-        print(f"Found {len(zarr_dirs)} valid zarr recordings in {base_dir}")
+        # Apply subset filtering if specified by subclass
+        if self.SUBSET_START_IDX is not None:
+            total_count = len(zarr_dirs)
+            zarr_dirs = zarr_dirs[self.SUBSET_START_IDX:self.SUBSET_END_IDX]
+            end_idx_display = self.SUBSET_END_IDX - 1 if self.SUBSET_END_IDX is not None else total_count - 1
+            print(f"Subset filter: Using {len(zarr_dirs)} out of {total_count} recordings (indices {self.SUBSET_START_IDX}-{end_idx_display})")
+        else:
+            print(f"Found {len(zarr_dirs)} valid zarr recordings in {base_dir}")
+
         print(f"Each recording may contain multiple task instances (segmented by language annotations)")
 
         if len(zarr_dirs) == 0:
@@ -624,3 +640,50 @@ class MeckaDataset(MultiThreadedDatasetBuilder):
         return {
             "train": zarr_dirs,
         }
+
+
+class MeckaDataset(MeckaDatasetBase):
+    """DatasetBuilder for Mecka bimanual manipulation dataset (full dataset)."""
+    pass
+
+
+class MeckaDatasetPart1(MeckaDatasetBase):
+    """DatasetBuilder for Mecka dataset - Part 1 (~37K samples, indices 0-10402)."""
+    SUBSET_START_IDX = 0
+    SUBSET_END_IDX = 10403
+
+
+class MeckaDatasetPart2(MeckaDatasetBase):
+    """DatasetBuilder for Mecka dataset - Part 2 (~30K samples, indices 10403-15604)."""
+    SUBSET_START_IDX = 10403
+    SUBSET_END_IDX = 15605
+
+
+class MeckaDatasetPart3(MeckaDatasetBase):
+    """DatasetBuilder for Mecka dataset - Part 3 (~30K samples, indices 15605-20805)."""
+    SUBSET_START_IDX = 15605
+    SUBSET_END_IDX = 20806
+
+
+class MeckaDatasetPart4(MeckaDatasetBase):
+    """DatasetBuilder for Mecka dataset - Part 4 (~36K samples, indices 20806-26007)."""
+    SUBSET_START_IDX = 20806
+    SUBSET_END_IDX = 26008
+
+
+class MeckaDatasetPart5(MeckaDatasetBase):
+    """DatasetBuilder for Mecka dataset - Part 5 (~36K samples, indices 26008-31208)."""
+    SUBSET_START_IDX = 26008
+    SUBSET_END_IDX = 31209
+
+
+class MeckaDatasetPart6(MeckaDatasetBase):
+    """DatasetBuilder for Mecka dataset - Part 6 (~39K samples, indices 31209-36410)."""
+    SUBSET_START_IDX = 31209
+    SUBSET_END_IDX = 36411
+
+
+class MeckaDatasetPart7(MeckaDatasetBase):
+    """DatasetBuilder for Mecka dataset - Part 7 (~39K samples, indices 36411-41612)."""
+    SUBSET_START_IDX = 36411
+    SUBSET_END_IDX = None  # None means until the end
