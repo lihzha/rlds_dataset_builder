@@ -412,3 +412,85 @@ Analysis:
 
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke using the already-downloaded subset.
+
+## 2026-06-13T08:25:17Z - a1001 smoke relaunch after packaging fix
+
+Goal:
+- Reach TFDS generation after fixing editable-install package exposure.
+
+Hypothesis:
+- With `agibot_dataset` included in `setup.py`, TFDS can import `MultiThreadedDatasetBuilder` and instantiate `Molmoact2YamDataset`.
+
+Change:
+- Relaunch from deployed commit `81db7ae7e39e9f9d6908c1f249d2aa46ec12156c`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 81db7ae7e39e9f9d6908c1f249d2aa46ec12156c
+- implementation_commit: 81db7ae7e39e9f9d6908c1f249d2aa46ec12156c
+- push/pull: deployed to a1001 detached worktree
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `81db7ae7e39e9f9d6908c1f249d2aa46ec12156c`
+
+Command / Job:
+- command: `sbatch --partition=cpu --time=04:00:00 --cpus-per-task=16 --mem=64G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam_smoke,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke,MODE=smoke,MOLMOACT2_YAM_MAX_FILES=1,MOLMOACT2_YAM_MAX_EPISODES=2,MOLMOACT2_YAM_N_WORKERS=1,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=1 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29036004
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_<jobid>.out and .err
+- artifacts: smoke TFDS shards, dataset_info.json, sample inspection in stdout
+
+Result:
+- status: failed
+- metrics/artifacts: raw one-file smoke subset still present; no TFDS output.
+- key evidence: Slurm job `29036004` failed after 34 seconds because importing `agibot_dataset.conversion_utils` executes `agibot_dataset/__init__.py`, which imports the agibot builder and requires missing `cv2`.
+
+Analysis:
+- Raw smoke files are already present, so this run should spend most time on editable install, builder import, video decode, and TFDS writing.
+
+Next:
+- Copy the shared conversion utility into `molmoact2_yam_dataset` and import it locally to avoid the agibot package side effect.
+
+## 2026-06-13T08:28:30Z - localize conversion utility
+
+Goal:
+- Remove the accidental OpenCV dependency introduced by importing through the `agibot_dataset` package.
+
+Hypothesis:
+- A local copy of `conversion_utils.py` inside `molmoact2_yam_dataset` will allow the builder to import `MultiThreadedDatasetBuilder` without importing agibot's OpenCV-dependent builder.
+
+Change:
+- Copied `agibot_dataset/conversion_utils.py` to `molmoact2_yam_dataset/conversion_utils.py`.
+- Updated the MolmoAct2 builder import to use `molmoact2_yam_dataset.conversion_utils`.
+- Removed `agibot_dataset` from `setup.py` package list.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 81db7ae7e39e9f9d6908c1f249d2aa46ec12156c
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: setup.py, molmoact2_yam_dataset/conversion_utils.py, molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 at `81db7ae7e39e9f9d6908c1f249d2aa46ec12156c`
+
+Command / Job:
+- command: `python3 -m py_compile molmoact2_yam_dataset/conversion_utils.py molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py`
+- job_id: n/a
+- run_dir: n/a
+- logs: terminal output
+- artifacts: localized conversion utility
+
+Result:
+- status: passed
+- metrics/artifacts: localized utility and builder syntax checks passed.
+- key evidence: `python3 -m py_compile molmoact2_yam_dataset/conversion_utils.py molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py` exited 0.
+
+Analysis:
+- This avoids installing `opencv-python` on the conversion environment and keeps the new dataset package self-contained.
+
+Next:
+- Syntax-check, commit, push, deploy, and relaunch smoke.

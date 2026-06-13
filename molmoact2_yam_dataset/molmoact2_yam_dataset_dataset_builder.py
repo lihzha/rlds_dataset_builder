@@ -15,7 +15,7 @@ from PIL import Image
 import pyarrow.parquet as pq
 import tensorflow_datasets as tfds
 
-from agibot_dataset.conversion_utils import MultiThreadedDatasetBuilder
+from molmoact2_yam_dataset.conversion_utils import MultiThreadedDatasetBuilder
 
 
 HF_REPO_ID = "allenai/MolmoAct2-BimanualYAM-Dataset"
