@@ -824,6 +824,46 @@ Analysis:
 Next:
 - Continue 15-minute monitoring through the remaining video streams and TFDS generation.
 
+## 2026-06-13T14:08:00Z - right-camera video stream reached
+
+Goal:
+- Confirm the raw download progressed beyond all left-camera video files and into the next camera stream.
+
+Hypothesis:
+- Continuing from left-camera videos into right-camera videos without retry exhaustion indicates the resumed sequential downloader is stable across stream boundaries.
+
+Change:
+- No code change; monitoring job `29039410`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: ebad16e095324e7c70a0f6ecb906c5fb7563e70f
+- implementation_commit: ebad16e095324e7c70a0f6ecb906c5fb7563e70f
+- push/pull: local worklog update pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `b7771176373d42b0f542ad8335c127901c8ee263`; running job uses that commit
+
+Command / Job:
+- command: `squeue`, `du -sh`, quota check, filtered log grep, and stdout tail for job `29039410`
+- job_id: 29039410
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29039410.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: running
+- metrics/artifacts: after about 1h07m on relaunch, raw directory is about 654G; stdout is around `[5383/9443] downloading videos/observation.images.right/chunk-000/file-034.mp4`.
+- key evidence: filtered error scan shows no retry exhaustion, traceback, or exception lines.
+
+Analysis:
+- The job has completed the left-camera stream and started the right-camera stream. Storage remains safe at about 2.24T used.
+
+Next:
+- Continue monitoring through right-camera and top-camera videos, then TFDS generation.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:
