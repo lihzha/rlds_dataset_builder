@@ -984,6 +984,46 @@ Analysis:
 Next:
 - Continue monitoring until raw download completes and TFDS generation starts.
 
+## 2026-06-13T17:59:00Z - live retry handling verified
+
+Goal:
+- Verify the expanded retry classifier handles transient large-file transfer failures without ending the full download job.
+
+Hypothesis:
+- Incomplete reads during large MP4 transfers should be logged as retryable, sleep, retry, and continue to later files.
+
+Change:
+- No code change; monitoring job `29039410`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 64accf65b02dcc3bc4d678a0f501628de1f22193
+- implementation_commit: 64accf65b02dcc3bc4d678a0f501628de1f22193
+- push/pull: local worklog update pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `b7771176373d42b0f542ad8335c127901c8ee263`; running job uses that commit
+
+Command / Job:
+- command: `squeue`, `du -sh`, quota check, filtered log grep, and stdout tail for job `29039410`
+- job_id: 29039410
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29039410.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: running
+- metrics/artifacts: after about 7h57m on relaunch, raw directory is about 1.7T; stdout is around `[8076/9443] downloading videos/observation.images.top/chunk-001/file-120.mp4`.
+- key evidence: stdout includes retryable incomplete-read errors for `top/chunk-001/file-062.mp4` and `file-080.mp4`, each sleeping 60s before retry 1/12, and the job then continued to later files.
+
+Analysis:
+- The expanded retry classifier is effective for the transient failure class that previously killed the full job. Storage remains safe at about 3.27T used.
+
+Next:
+- Continue monitoring until raw download completes and TFDS generation starts.
+
 ## 2026-06-13T15:10:00Z - two-hour retry relaunch checkpoint
 
 Goal:
