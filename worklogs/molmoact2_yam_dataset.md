@@ -743,6 +743,47 @@ Analysis:
 Next:
 - Commit/push the retry patch, update the a1001 detached worktree, relaunch from the partial raw directory, and monitor early skip/resume behavior.
 
+## 2026-06-13T13:06:00Z - relaunch after network retry patch
+
+Goal:
+- Resume the full raw download from the partial 482G snapshot with retry support for transient connection resets.
+
+Hypothesis:
+- The downloader should skip completed files, retry ordinary network resets instead of exiting, and resume around the previous failure point in `videos/observation.images.left/chunk-001`.
+
+Change:
+- Deployed commit `b7771176373d42b0f542ad8335c127901c8ee263` to the a1001 detached worktree.
+- Relaunched the full build without deleting `/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: b7771176373d42b0f542ad8335c127901c8ee263
+- implementation_commit: b7771176373d42b0f542ad8335c127901c8ee263
+- push/pull: pushed locally and fetched/checked out on a1001
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `b7771176373d42b0f542ad8335c127901c8ee263`
+
+Command / Job:
+- command: `sbatch --partition=cpu_long --time=7-00:00:00 --cpus-per-task=32 --mem=160G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets,MODE=full,MOLMOACT2_YAM_N_WORKERS=24,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=24,HF_SNAPSHOT_MAX_WORKERS=1,HF_DOWNLOAD_RETRIES=12,HF_DOWNLOAD_RETRY_SLEEP=60 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29039410
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29039410.out and .err
+- artifacts: full raw snapshot, full TFDS shards, dataset_info.json, post-build sample inspection
+
+Result:
+- status: running
+- metrics/artifacts: pending early log inspection.
+- key evidence: `sbatch` returned job `29039410`; raw directory before relaunch was about 482G and total Lustre usage about 2.06T.
+
+Analysis:
+- No raw cleanup is appropriate because the previous failure was a transient network reset and the partial data is useful.
+
+Next:
+- Monitor early job output for skip/resume behavior, then continue storage/error monitoring.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:
