@@ -85,3 +85,83 @@ Analysis:
 
 Next:
 - Commit and deploy this exact builder commit to a1001 for a smoke build.
+
+## 2026-06-13T07:51:25Z - a1001 environment setup
+
+Goal:
+- Create the a1001 conversion environment before any raw dataset download.
+
+Hypothesis:
+- The pinned Python packages in `scripts/molmoact2_yam/setup_env_a1001.sh` are enough to run the TFDS builder and HF subset downloader on the login/Slurm environment.
+
+Change:
+- No code change for this attempt; using deployed builder commit `afcfcdcc5210ce46b9dab2279c45f6b3c404c70b`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: afcfcdcc5210ce46b9dab2279c45f6b3c404c70b
+- implementation_commit: afcfcdcc5210ce46b9dab2279c45f6b3c404c70b
+- push/pull: deployed to a1001 detached worktree
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: `/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613` at `afcfcdcc5210ce46b9dab2279c45f6b3c404c70b`, clean detached HEAD
+
+Command / Job:
+- command: `ssh a1001 'cd /lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613 && NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha bash scripts/molmoact2_yam/setup_env_a1001.sh'`
+- job_id: n/a
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam
+- logs: terminal output
+- artifacts: Python venv with TensorFlow/TFDS/HF/imageio-ffmpeg/gsutil
+
+Result:
+- status: failed
+- metrics/artifacts: no data downloaded; only a partial Python 3.8 venv was created.
+- key evidence: pip failed with `No matching distribution found for tensorflow==2.15.1`; preflight then showed `python3.9=Python 3.9.18` and default `python3=Python 3.8.10`.
+
+Analysis:
+- Remote preflight showed no active Slurm jobs and no existing venv. Quota output showed 1.547T used; the user-imposed 15T budget with 2T reserve still leaves about 11.45T before cleanup.
+
+Next:
+- Patch setup to select a supported Python interpreter and recreate only this task's incomplete venv.
+
+## 2026-06-13T07:54:00Z - a1001 Python selector patch
+
+Goal:
+- Make the a1001 environment setup reproducible with a supported TensorFlow interpreter.
+
+Hypothesis:
+- Selecting `python3.9` on a1001 and removing the incomplete Python 3.8 venv will allow the pinned TensorFlow/TFDS environment to install cleanly.
+
+Change:
+- Updated `scripts/molmoact2_yam/setup_env_a1001.sh` to prefer Python 3.11/3.10/3.9, fail clearly if no supported interpreter exists, and delete only this task's existing venv when it was created with Python <3.9.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: afcfcdcc5210ce46b9dab2279c45f6b3c404c70b
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: scripts/molmoact2_yam/setup_env_a1001.sh, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 still at previous detached commit until this patch is committed and deployed
+
+Command / Job:
+- command: `bash -n scripts/molmoact2_yam/setup_env_a1001.sh`
+- job_id: n/a
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam
+- logs: terminal output
+- artifacts: patched setup wrapper
+
+Result:
+- status: passed
+- metrics/artifacts: setup wrapper syntax is valid.
+- key evidence: `bash -n scripts/molmoact2_yam/setup_env_a1001.sh` exited 0.
+
+Analysis:
+- This is a dependency-bootstrap fix only; the raw-data footprint remains zero for this task.
+
+Next:
+- Syntax-check, commit, push, update the a1001 detached worktree, and rerun environment setup.
