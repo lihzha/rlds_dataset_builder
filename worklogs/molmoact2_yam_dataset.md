@@ -495,6 +495,47 @@ Analysis:
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke.
 
+## 2026-06-13T08:41:31Z - expanded smoke before full conversion
+
+Goal:
+- Test multiple source file triplets and multiprocessing before launching the full conversion.
+
+Hypothesis:
+- A 2-file, max-4-episode smoke with two workers will catch cross-file schema issues and process-pool serialization issues at small storage cost.
+
+Change:
+- Relaunch from deployed commit `88e43f2061d04f67ceb3005ce533f4ad1b0c1960`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 88e43f2061d04f67ceb3005ce533f4ad1b0c1960
+- implementation_commit: 88e43f2061d04f67ceb3005ce533f4ad1b0c1960
+- push/pull: deployed to a1001 detached worktree
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `88e43f2061d04f67ceb3005ce533f4ad1b0c1960`
+
+Command / Job:
+- command: `sbatch --partition=cpu --time=01:00:00 --cpus-per-task=8 --mem=64G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam_smoke2,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke2,MODE=smoke,MOLMOACT2_YAM_MAX_FILES=2,MOLMOACT2_YAM_MAX_EPISODES=4,MOLMOACT2_YAM_N_WORKERS=2,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=2 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29036244
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke2/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_<jobid>.out and .err
+- artifacts: expanded smoke TFDS shards, dataset_info.json, sample inspection in stdout
+
+Result:
+- status: passed
+- metrics/artifacts: expanded smoke generated 5 episodes, 2 TFRecord shards, and sample inspection output; smoke scratch directories were deleted after inspection.
+- key evidence: job `29036244` completed 0:0; stdout reports `MolmoAct2-YAM builder found 2 source parquet files`, `Generating with 2 workers using ProcessPoolExecutor`, `num_examples=5`, dataset size 222.00 MiB, and action/state shape `(14,)`.
+
+Analysis:
+- The validated full upload route is local streaming via workstation `gsutil`, so the full conversion can proceed.
+- Smoke scratch cleanup removed `/lustre/.../datasets/raw/molmoact2_yam_smoke*` and `/lustre/.../tensorflow_datasets_smoke*`; quota use after cleanup is 1.558T. Under the user's 15T working budget with 2T reserve, this leaves about 11.44T for full raw plus TFDS before cleanup.
+
+Next:
+- Submit the full conversion on `cpu_long` with enough workers for the 76M-frame dataset, then actively monitor logs, storage, and output artifacts.
+
 ## 2026-06-13T08:38:00Z - local streaming upload route
 
 Goal:
