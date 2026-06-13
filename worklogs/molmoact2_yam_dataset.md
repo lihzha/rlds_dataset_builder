@@ -538,6 +538,47 @@ Analysis:
 Next:
 - Commit/push the throttle patch, update the a1001 detached worktree, and relaunch the full conversion from the partial raw directory.
 
+## 2026-06-13T09:12:00Z - relaunch full conversion with sequential HF downloader
+
+Goal:
+- Continue the full raw download and TFDS build from the partial a1001 raw directory after the 429 failure.
+
+Hypothesis:
+- With `HF_SNAPSHOT_MAX_WORKERS=1`, `HF_DOWNLOAD_RETRIES=12`, and `HF_DOWNLOAD_RETRY_SLEEP=60`, the job will avoid concurrent HF request bursts and wait out any remaining rate-limit windows.
+
+Change:
+- Deployed commit `3b13e6c58c6c751832429d8e82f85a19e0d908ba` to the a1001 detached worktree.
+- Relaunched the full build without deleting `/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam`, preserving the roughly 984M already downloaded.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 3b13e6c58c6c751832429d8e82f85a19e0d908ba
+- implementation_commit: 3b13e6c58c6c751832429d8e82f85a19e0d908ba
+- push/pull: pushed locally and fetched/checked out on a1001
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `3b13e6c58c6c751832429d8e82f85a19e0d908ba`
+
+Command / Job:
+- command: `sbatch --partition=cpu_long --time=7-00:00:00 --cpus-per-task=32 --mem=160G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets,MODE=full,MOLMOACT2_YAM_N_WORKERS=24,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=24,HF_SNAPSHOT_MAX_WORKERS=1,HF_DOWNLOAD_RETRIES=12,HF_DOWNLOAD_RETRY_SLEEP=60 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29036366
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29036366.out and .err
+- artifacts: full raw snapshot, full TFDS shards, dataset_info.json, post-build sample inspection
+
+Result:
+- status: running
+- metrics/artifacts: pending early log inspection.
+- key evidence: `sbatch` returned job `29036366`.
+
+Analysis:
+- Storage before relaunch remains safe: raw directory is about 984M and Lustre user usage is about 1.56T.
+
+Next:
+- Monitor job 29036366 queue/logs/storage. If it finishes, inspect TFDS output and sample visualizations before uploading to GCS.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:
