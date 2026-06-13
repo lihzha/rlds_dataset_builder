@@ -495,6 +495,49 @@ Analysis:
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke.
 
+## 2026-06-13T09:05:00Z - throttle full HF download after 429 failure
+
+Goal:
+- Make the full MolmoAct2 YAM raw download robust enough to resume after Hugging Face rate limits.
+
+Hypothesis:
+- The previous full job failed because `snapshot_download` used concurrent HEAD/GET requests across thousands of files. A sequential file loop that skips already materialized files and adds longer retry backoff should continue from the partial raw directory without discarding completed downloads.
+
+Change:
+- Replaced the default full `snapshot_download` path with sequential `HfApi().list_repo_files` plus per-file `hf_hub_download` retries when `HF_SNAPSHOT_MAX_WORKERS=1`.
+- Added local-file skip logic and retry knobs: `HF_DOWNLOAD_RETRIES`, `HF_DOWNLOAD_RETRY_SLEEP`, `--force`.
+- Reduced the sbatch default memory request to 160G to match the `cpu_long` QOS limit and echo the HF retry settings.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 07df5d34dc05298f8d7cfdc253255e6ad4b72e50
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: scripts/molmoact2_yam/download_hf_snapshot.py, scripts/molmoact2_yam/build_a1001.sbatch, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 job 29036322 failed at deployed commit `ab0e4556a0f630d3cb4c9aa1d5156ca5c3c98e34`
+
+Command / Job:
+- command: `python3 -m py_compile scripts/molmoact2_yam/download_hf_snapshot.py && bash -n scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29036322
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29036322.out and .err
+- artifacts: partial raw download at `/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam`
+
+Result:
+- status: patch_ready
+- metrics/artifacts: job 29036322 failed after 2m49s with repeated HTTP 429s; partial raw download is about 980M with 1,129 files.
+- key evidence: stderr ended in `requests.exceptions.HTTPError: 429 Client Error: Too Many Requests` for HF dataset parquet files.
+
+Analysis:
+- The smoke jobs passed because they requested only a bounded subset. The full snapshot request fanned out across thousands of files and exceeded Hugging Face rate limits quickly.
+- Storage remains safe: quota is about 1.56T used and partial raw data is under 1G.
+
+Next:
+- Commit/push the throttle patch, update the a1001 detached worktree, and relaunch the full conversion from the partial raw directory.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:

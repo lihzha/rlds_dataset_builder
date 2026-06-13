@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --mem=256G
+#SBATCH --mem=160G
 #SBATCH --time=7-00:00:00
 #SBATCH --job-name=molmo2_yam_tfds
 #SBATCH --output=/lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/%x_%j.out
@@ -32,6 +32,12 @@ echo "RAW_DIR=$RAW_DIR"
 echo "TFDS_DATA_DIR=$TFDS_DATA_DIR"
 export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
 echo "HF_HUB_DISABLE_XET=$HF_HUB_DISABLE_XET"
+export HF_SNAPSHOT_MAX_WORKERS="${HF_SNAPSHOT_MAX_WORKERS:-1}"
+export HF_DOWNLOAD_RETRIES="${HF_DOWNLOAD_RETRIES:-8}"
+export HF_DOWNLOAD_RETRY_SLEEP="${HF_DOWNLOAD_RETRY_SLEEP:-30}"
+echo "HF_SNAPSHOT_MAX_WORKERS=$HF_SNAPSHOT_MAX_WORKERS"
+echo "HF_DOWNLOAD_RETRIES=$HF_DOWNLOAD_RETRIES"
+echo "HF_DOWNLOAD_RETRY_SLEEP=$HF_DOWNLOAD_RETRY_SLEEP"
 echo "HEAD=$(git rev-parse HEAD)"
 git status --short --branch
 
