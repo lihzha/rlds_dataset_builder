@@ -864,6 +864,47 @@ Analysis:
 Next:
 - Continue monitoring through right-camera and top-camera videos, then TFDS generation.
 
+## 2026-06-13T15:10:00Z - two-hour retry relaunch checkpoint
+
+Goal:
+- Confirm the retry-patched relaunch remains healthy after sustained downloading beyond the previous connection-reset failure.
+
+Hypothesis:
+- If no connection reset traceback or retry exhaustion appears after two hours, the patch is sufficient for ordinary transient network failures and the job should continue to completion unless a different issue appears.
+
+Change:
+- No code change; monitoring job `29039410`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 38b8830b204686c6ff2b37f95f0ac158987af87e
+- implementation_commit: 38b8830b204686c6ff2b37f95f0ac158987af87e
+- push/pull: local worklog update pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `b7771176373d42b0f542ad8335c127901c8ee263`; running job uses that commit
+
+Command / Job:
+- command: `squeue`, `du -sh`, quota check, filtered log grep, and stdout tail for job `29039410`
+- job_id: 29039410
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29039410.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: running
+- metrics/artifacts: after about 2h09m on relaunch, raw directory is about 806G; stdout is around `[5814/9443] downloading videos/observation.images.right/chunk-000/file-465.mp4`.
+- key evidence: filtered error scan shows no new `ConnectionResetError`, retry exhaustion, traceback, or exception lines; quota reports about 2.39T used.
+
+Analysis:
+- The relaunch has run longer than the previous post-resume failure window and is now steadily downloading right-camera video files.
+- Storage remains far below the user-defined 13T effective working ceiling.
+
+Next:
+- Continue monitoring through right-camera and top-camera videos, then TFDS generation.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:
