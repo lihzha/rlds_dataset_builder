@@ -864,6 +864,46 @@ Analysis:
 Next:
 - Continue monitoring through right-camera and top-camera videos, then TFDS generation.
 
+## 2026-06-13T15:39:00Z - one-terabyte raw checkpoint
+
+Goal:
+- Verify the resumed download remains healthy through the right-camera chunk transition and the first terabyte of raw data.
+
+Hypothesis:
+- If the job reaches `right/chunk-001` and about 1T raw without errors, the retry patch and resume flow are stable for long video transfers.
+
+Change:
+- No code change; monitoring job `29039410`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 575f9cfb3783dec9455d01466c95b2de0cdf2182
+- implementation_commit: 575f9cfb3783dec9455d01466c95b2de0cdf2182
+- push/pull: local worklog update pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `b7771176373d42b0f542ad8335c127901c8ee263`; running job uses that commit
+
+Command / Job:
+- command: `squeue`, `du -sh`, quota check, filtered log grep, and stdout tail for job `29039410`
+- job_id: 29039410
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29039410.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: running
+- metrics/artifacts: after about 3h37m on relaunch, raw directory is about 1018G; stdout is around `[6389/9443] downloading videos/observation.images.right/chunk-001/file-040.mp4`.
+- key evidence: filtered error scan shows no new `ConnectionResetError`, retry exhaustion, traceback, or exception lines; quota reports about 2.61T used.
+
+Analysis:
+- Download has crossed 1T raw while staying far below the user's effective 13T working ceiling. No cleanup is warranted until final TFDS upload is verified.
+
+Next:
+- Continue monitoring through remaining right-camera videos, top-camera videos, and TFDS generation.
+
 ## 2026-06-13T15:10:00Z - two-hour retry relaunch checkpoint
 
 Goal:
