@@ -38,12 +38,46 @@ def sample_patterns(max_files: int, chunks: list[int]) -> list[str]:
 
 
 def is_retryable_error(exc: BaseException) -> bool:
-    response = getattr(exc, "response", None)
-    status_code = getattr(response, "status_code", None)
-    if status_code in {429, 500, 502, 503, 504}:
-        return True
-    message = str(exc)
-    return any(code in message for code in ("429", "500", "502", "503", "504", "Too Many Requests"))
+    retryable_names = {
+        "ChunkedEncodingError",
+        "ConnectionError",
+        "ConnectionResetError",
+        "ConnectTimeout",
+        "ProtocolError",
+        "ReadTimeout",
+        "SSLError",
+        "Timeout",
+    }
+    transient_fragments = (
+        "429",
+        "500",
+        "502",
+        "503",
+        "504",
+        "Connection aborted",
+        "Connection reset",
+        "EOF occurred",
+        "ProtocolError",
+        "Read timed out",
+        "Remote end closed connection",
+        "Too Many Requests",
+    )
+
+    current: BaseException | None = exc
+    while current is not None:
+        response = getattr(current, "response", None)
+        status_code = getattr(response, "status_code", None)
+        if status_code in {429, 500, 502, 503, 504}:
+            return True
+        if current.__class__.__name__ in retryable_names:
+            return True
+        message = str(current)
+        if "No space left on device" in message:
+            return False
+        if any(fragment in message for fragment in transient_fragments):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 def download_with_retry(

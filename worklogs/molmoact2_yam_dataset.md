@@ -701,6 +701,48 @@ Analysis:
 Next:
 - Continue monitoring raw download. Next important milestones are completing left-camera videos, entering other camera streams, and starting TFDS generation.
 
+## 2026-06-13T12:54:00Z - retry transient connection resets
+
+Goal:
+- Recover the full raw download after a transient Hugging Face connection reset and make relaunches robust to similar non-HTTP network failures.
+
+Hypothesis:
+- Job `29036366` failed because the outer retry classifier did not treat `requests.exceptions.ConnectionError` / `ConnectionResetError` as retryable, even though this is a transient network condition during a large video download.
+
+Change:
+- Expanded `is_retryable_error` to walk exception causes/contexts and retry connection errors, timeouts, SSL/protocol aborts, HTTP 429/5xx status codes, and known transient message fragments.
+- Preserved a hard stop for `No space left on device` so storage exhaustion is not hidden by retries.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: fb6a02059d92cc7aee1c29a8ac2432c6ab289c8c
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: scripts/molmoact2_yam/download_hf_snapshot.py, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 job `29036366` failed at running commit `3b13e6c58c6c751832429d8e82f85a19e0d908ba`
+
+Command / Job:
+- command: `python3 -m py_compile scripts/molmoact2_yam/download_hf_snapshot.py`
+- job_id: 29036366
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29036366.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: patch_ready
+- metrics/artifacts: job `29036366` failed after 3h43m with raw directory about 482G and stdout around `[4864/9443] downloading videos/observation.images.left/chunk-001/file-280.mp4`.
+- key evidence: stderr traceback ends with `requests.exceptions.ConnectionError: (ProtocolError('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))...)`.
+
+Analysis:
+- This is not a data/schema failure and not storage exhaustion. The raw directory can be reused because the downloader skips completed target files.
+- The retry patch should catch the same class of transient failure and keep the job alive across ordinary network resets.
+
+Next:
+- Commit/push the retry patch, update the a1001 detached worktree, relaunch from the partial raw directory, and monitor early skip/resume behavior.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:
