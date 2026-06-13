@@ -784,6 +784,46 @@ Analysis:
 Next:
 - Monitor early job output for skip/resume behavior, then continue storage/error monitoring.
 
+## 2026-06-13T13:27:00Z - retry relaunch clears old failure point
+
+Goal:
+- Verify the connection-reset retry patch did not regress resume behavior and that the relaunch advanced beyond the previous failure point.
+
+Hypothesis:
+- Completed files should be skipped through the old failure location, and the job should continue downloading new files without immediately reproducing the traceback.
+
+Change:
+- No code change; monitoring job `29039410`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 15dbef82729d99920eec5d7ad8ce02c48f9749e6
+- implementation_commit: 15dbef82729d99920eec5d7ad8ce02c48f9749e6
+- push/pull: local worklog update pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `b7771176373d42b0f542ad8335c127901c8ee263`; running job uses that commit
+
+Command / Job:
+- command: `squeue`, `du -sh`, quota check, filtered log grep, and stdout tail for job `29039410`
+- job_id: 29039410
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29039410.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: running
+- metrics/artifacts: after about 21m, raw directory is about 534G; stdout is around `[5014/9443] downloading videos/observation.images.left/chunk-001/file-430.mp4`.
+- key evidence: early logs skipped already completed files through `[4864/9443]`; filtered error scan shows no new connection reset traceback or retry exhaustion.
+
+Analysis:
+- The relaunch successfully resumed past the failed file region. Continue monitoring because another transient reset could occur later, but it should now be retried rather than ending the job.
+
+Next:
+- Continue 15-minute monitoring through the remaining video streams and TFDS generation.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:
