@@ -165,3 +165,43 @@ Analysis:
 
 Next:
 - Syntax-check, commit, push, update the a1001 detached worktree, and rerun environment setup.
+
+## 2026-06-13T07:58:30Z - a1001 TFDS pin patch
+
+Goal:
+- Finish dependency setup on a1001's Python 3.9 environment.
+
+Hypothesis:
+- `tensorflow-datasets==4.9.3` is compatible with Python 3.9 and sufficient for this TFDS builder, while `4.9.4` now requires Python >=3.10.
+
+Change:
+- Lowered the setup wrapper's TFDS pin from `4.9.4` to `4.9.3`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 50dfcb819da026b31de4a6ce80b7b8c62917739c
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: scripts/molmoact2_yam/setup_env_a1001.sh, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 at `50dfcb819da026b31de4a6ce80b7b8c62917739c`, clean detached HEAD
+
+Command / Job:
+- command: `bash -n scripts/molmoact2_yam/setup_env_a1001.sh`
+- job_id: n/a
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam
+- logs: terminal output
+- artifacts: patched setup wrapper
+
+Result:
+- status: passed
+- metrics/artifacts: setup wrapper syntax is valid with the adjusted TFDS pin.
+- key evidence: `bash -n scripts/molmoact2_yam/setup_env_a1001.sh` exited 0.
+
+Analysis:
+- The previous setup attempt selected Python 3.9 and removed the unsupported Python 3.8 venv successfully. It then failed only because the TFDS pin rejected Python 3.9. No raw dataset files were downloaded.
+
+Next:
+- Syntax-check, commit, push, update the a1001 detached worktree, and rerun setup using the existing Python 3.9 venv.

@@ -48,7 +48,7 @@ fi
 "$ENV_DIR/bin/python" -m pip install --upgrade pip wheel setuptools
 "$ENV_DIR/bin/python" -m pip install \
   tensorflow==2.15.1 \
-  tensorflow-datasets==4.9.4 \
+  tensorflow-datasets==4.9.3 \
   pyarrow==15.0.2 \
   huggingface_hub==0.33.0 \
   imageio-ffmpeg==0.5.1 \
