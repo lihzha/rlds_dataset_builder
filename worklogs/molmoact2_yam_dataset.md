@@ -332,3 +332,83 @@ Analysis:
 
 Next:
 - Syntax-check, commit, push, deploy the patch, then relaunch the bounded smoke conversion.
+
+## 2026-06-13T08:07:19Z - a1001 smoke relaunch after Xet patch
+
+Goal:
+- Re-run the bounded smoke conversion after avoiding the rate-limited Xet path.
+
+Hypothesis:
+- With `HF_HUB_DISABLE_XET=1`, the downloader can fetch the one-file subset and reach the parquet/video/TFDS stages.
+
+Change:
+- Relaunch from deployed commit `d6f13e21b55a0c37cc9c94785a19584be3d36ea4`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: d6f13e21b55a0c37cc9c94785a19584be3d36ea4
+- implementation_commit: d6f13e21b55a0c37cc9c94785a19584be3d36ea4
+- push/pull: deployed to a1001 detached worktree
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `d6f13e21b55a0c37cc9c94785a19584be3d36ea4`
+
+Command / Job:
+- command: `sbatch --partition=cpu --time=04:00:00 --cpus-per-task=16 --mem=64G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam_smoke,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke,MODE=smoke,MOLMOACT2_YAM_MAX_FILES=1,MOLMOACT2_YAM_MAX_EPISODES=2,MOLMOACT2_YAM_N_WORKERS=1,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=1 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29035766
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_<jobid>.out and .err
+- artifacts: smoke TFDS shards, dataset_info.json, sample inspection in stdout
+
+Result:
+- status: failed
+- metrics/artifacts: raw one-file smoke subset downloaded successfully; no TFDS output.
+- key evidence: Slurm job `29035766` failed after 54 seconds at TFDS import with `ModuleNotFoundError: No module named 'agibot_dataset'`.
+
+Analysis:
+- The previous failed job only left small meta files; the smoke relaunch may reuse those and should download the missing parquet/video triplet.
+
+Next:
+- Add `agibot_dataset` to `setup.py` package list because `molmoact2_yam_dataset` imports `agibot_dataset.conversion_utils`.
+
+## 2026-06-13T08:14:00Z - package agibot conversion utility
+
+Goal:
+- Let the MolmoAct2 YAM TFDS builder import the shared multithreaded builder utility after editable install.
+
+Hypothesis:
+- Adding `agibot_dataset` to `setup.py` packages will resolve the missing `agibot_dataset.conversion_utils` import and let TFDS instantiate the builder.
+
+Change:
+- Added `agibot_dataset` to the package list in `setup.py`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: d6f13e21b55a0c37cc9c94785a19584be3d36ea4
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: setup.py, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 at `d6f13e21b55a0c37cc9c94785a19584be3d36ea4`
+
+Command / Job:
+- command: `python3 -m py_compile molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py`
+- job_id: n/a
+- run_dir: n/a
+- logs: terminal output
+- artifacts: packaging patch
+
+Result:
+- status: passed
+- metrics/artifacts: builder syntax check passed with packaging update.
+- key evidence: `python3 -m py_compile molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py` exited 0.
+
+Analysis:
+- Downloads and Xet avoidance are now validated for the smoke subset; the next failure is local packaging only.
+
+Next:
+- Syntax-check, commit, push, deploy, and relaunch smoke using the already-downloaded subset.
