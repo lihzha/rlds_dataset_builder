@@ -620,6 +620,47 @@ Analysis:
 Next:
 - Continue monitoring download progress, rate-limit retries, raw storage, and eventual transition into TFDS generation.
 
+## 2026-06-13T11:14:00Z - two-hour full download checkpoint
+
+Goal:
+- Confirm the full download remains healthy during sustained video transfer and stays within storage limits.
+
+Hypothesis:
+- If no new 429s or tracebacks appear after two hours, the sequential downloader is stable enough to continue without changing the running job.
+
+Change:
+- No code change; monitoring job `29036366`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: bd8cbda12a9cfd412cc7911b38d3a51cadb7947c
+- implementation_commit: bd8cbda12a9cfd412cc7911b38d3a51cadb7947c
+- push/pull: local worklog update pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `3b13e6c58c6c751832429d8e82f85a19e0d908ba`; running job uses that commit
+
+Command / Job:
+- command: `squeue`, `du -sh`, quota check, filtered log grep, and stdout tail for job `29036366`
+- job_id: 29036366
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29036366.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: running
+- metrics/artifacts: after about 2h03m, raw directory is about 227G; stdout is around `[4201/9443] downloading videos/observation.images.left/chunk-000/file-617.mp4`.
+- key evidence: filtered error scan still shows no new `HTTP Error 429`, retry exhaustion, traceback, or exception lines; quota reports about 1.8T used.
+
+Analysis:
+- Video download throughput is steady and storage remains well under the user limit requiring at least 2T free out of the 15T working budget.
+- No patch or relaunch is indicated. The next major transition is finishing left-camera videos and moving through the other two camera streams, followed by TFDS build.
+
+Next:
+- Continue 15-minute monitoring during raw download; add another worklog checkpoint on failure, camera-stream transition, large storage jump, or TFDS generation start.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:
