@@ -249,3 +249,86 @@ Analysis:
 
 Next:
 - Run a one-file, two-episode smoke conversion on a1001 local storage. Do not launch the full conversion until GCS upload auth is resolved.
+
+## 2026-06-13T08:04:49Z - a1001 smoke conversion launch
+
+Goal:
+- Prove the downloader, video decoder, parquet grouping, and TFDS writer on a tiny bounded subset.
+
+Hypothesis:
+- A smoke build with one HF data/video file triplet and at most two episodes will expose schema/video/TFDS issues without meaningful storage use.
+
+Change:
+- No source change; launch from deployed commit `91575a1244632d022913c75ee11e43cf5ffbcf30`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 91575a1244632d022913c75ee11e43cf5ffbcf30
+- implementation_commit: 91575a1244632d022913c75ee11e43cf5ffbcf30
+- push/pull: deployed to a1001 detached worktree
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `91575a1244632d022913c75ee11e43cf5ffbcf30`
+
+Command / Job:
+- command: `sbatch --partition=cpu --time=04:00:00 --cpus-per-task=16 --mem=64G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam_smoke,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke,MODE=smoke,MOLMOACT2_YAM_MAX_FILES=1,MOLMOACT2_YAM_MAX_EPISODES=2,MOLMOACT2_YAM_N_WORKERS=1,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=1 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29035735
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_<jobid>.out and .err
+- artifacts: smoke TFDS shards, dataset_info.json, sample inspection in stdout
+
+Result:
+- status: failed
+- metrics/artifacts: no TFDS output; partial raw meta files only.
+- key evidence: Slurm job `29035735` failed after 10 seconds with Hugging Face `429 Too Many Requests` on `xet-read-token`.
+
+Analysis:
+- a1001 GCS upload credentials are still blocked, but this local smoke does not require GCS access.
+- The smoke uses `cpu` instead of `cpu_long` because live `sinfo` showed idle `cpu` nodes and the bounded run should not need long wall time.
+
+Next:
+- Patch the downloader/wrapper to disable Hugging Face Xet by default, because a direct `HF_HUB_DISABLE_XET=1` probe successfully downloaded `meta/tasks_annotated.parquet` over regular HTTP.
+
+## 2026-06-13T08:08:30Z - disable HF Xet for downloads
+
+Goal:
+- Avoid the rate-limited Hugging Face Xet token endpoint for smoke and full downloads.
+
+Hypothesis:
+- Setting `HF_HUB_DISABLE_XET=1` before importing `huggingface_hub` will use regular HTTP downloads and avoid the 429 failure observed on a1001.
+
+Change:
+- Added `os.environ.setdefault("HF_HUB_DISABLE_XET", "1")` before `huggingface_hub` imports in `download_hf_snapshot.py`.
+- Added an exported default and echo in `build_a1001.sbatch`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 91575a1244632d022913c75ee11e43cf5ffbcf30
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: scripts/molmoact2_yam/download_hf_snapshot.py, scripts/molmoact2_yam/build_a1001.sbatch, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 at `91575a1244632d022913c75ee11e43cf5ffbcf30`
+
+Command / Job:
+- command: `python3 -m py_compile scripts/molmoact2_yam/download_hf_snapshot.py`
+- command: `bash -n scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: n/a
+- run_dir: n/a
+- logs: terminal output
+- artifacts: patched downloader/build wrapper
+
+Result:
+- status: passed
+- metrics/artifacts: downloader and Slurm wrapper syntax checks passed.
+- key evidence: `python3 -m py_compile scripts/molmoact2_yam/download_hf_snapshot.py` and `bash -n scripts/molmoact2_yam/build_a1001.sbatch` exited 0.
+
+Analysis:
+- No HF token is configured locally or on a1001. The Xet-disabled probe succeeded without a token, so this is preferable to requiring credential setup for public data access.
+
+Next:
+- Syntax-check, commit, push, deploy the patch, then relaunch the bounded smoke conversion.

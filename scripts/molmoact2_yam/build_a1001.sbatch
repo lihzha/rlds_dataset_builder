@@ -30,6 +30,8 @@ echo "SLURM_JOB_ID=${SLURM_JOB_ID:-none}"
 echo "MODE=$MODE"
 echo "RAW_DIR=$RAW_DIR"
 echo "TFDS_DATA_DIR=$TFDS_DATA_DIR"
+export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
+echo "HF_HUB_DISABLE_XET=$HF_HUB_DISABLE_XET"
 echo "HEAD=$(git rev-parse HEAD)"
 git status --short --branch
 
