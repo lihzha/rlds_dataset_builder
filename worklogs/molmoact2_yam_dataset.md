@@ -579,6 +579,47 @@ Analysis:
 Next:
 - Monitor job 29036366 queue/logs/storage. If it finishes, inspect TFDS output and sample visualizations before uploading to GCS.
 
+## 2026-06-13T09:52:00Z - full download reaches video phase
+
+Goal:
+- Verify the throttled relaunch remains healthy through the transition from small parquet files to large video assets.
+
+Hypothesis:
+- If the sequential downloader avoids rate limits, the job should advance from parquet files into `videos/...` without new HTTP 429 tracebacks and storage should start increasing faster.
+
+Change:
+- No code change; monitoring job `29036366`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: bd7f6fa508f7b3ba3c45240b565dd602bded1eb8
+- implementation_commit: bd7f6fa508f7b3ba3c45240b565dd602bded1eb8
+- push/pull: local worklog update pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `3b13e6c58c6c751832429d8e82f85a19e0d908ba`; running job uses that commit
+
+Command / Job:
+- command: `squeue`, `du -sh`, file-count, filtered log grep, and stdout tail for job `29036366`
+- job_id: 29036366
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29036366.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: running
+- metrics/artifacts: after about 40m, job reached `videos/observation.images.left/chunk-000/file-000.mp4`; raw directory is about 11G with 3,583 files counted.
+- key evidence: stdout tail shows `[3584/9443] downloading videos/observation.images.left/chunk-000/file-000.mp4` and later video files; filtered error scan showed no new 429 or traceback lines.
+
+Analysis:
+- The throttle patch is working through the failure region that killed job `29036322`.
+- Storage remains well below the user budget and should be monitored more closely now that video downloads have started.
+
+Next:
+- Continue monitoring download progress, rate-limit retries, raw storage, and eventual transition into TFDS generation.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:
