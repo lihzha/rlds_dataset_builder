@@ -495,6 +495,46 @@ Analysis:
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke.
 
+## 2026-06-13T08:38:00Z - local streaming upload route
+
+Goal:
+- Establish a GCS upload path that does not require copying Google credentials to a1001 and does not require staging the full dataset on local disk.
+
+Hypothesis:
+- Streaming each remote TFDS file over SSH into local `gsutil cp -` can upload final artifacts using the workstation's existing GCS auth, while leaving a1001 unauthenticated.
+
+Change:
+- Added `scripts/molmoact2_yam/stream_upload_from_a1001.sh`, a local helper that lists files on a1001 and streams them to a configurable GCS destination.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: dc002fe90cf39a3398853045ca35e249492ab741
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: scripts/molmoact2_yam/stream_upload_from_a1001.sh, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 at `dc002fe90cf39a3398853045ca35e249492ab741`
+
+Command / Job:
+- command: `bash -n scripts/molmoact2_yam/stream_upload_from_a1001.sh`
+- job_id: n/a
+- run_dir: n/a
+- logs: terminal output
+- artifacts: local streaming upload helper
+
+Result:
+- status: passed
+- metrics/artifacts: shell syntax check passed.
+- key evidence: local workstation has working `gsutil` auth for `gs://pi0-cot/OXE`; a1001 has no `.boto` or gcloud credentials; local disk only has 623G free, so local staging is not viable for the full dataset.
+
+Analysis:
+- This is slower than remote `gsutil -m rsync`, but it avoids persisting sensitive GCS credentials on a1001. It can be validated against the smoke TFDS folder before the full conversion output is uploaded.
+
+Next:
+- Commit the helper and validate it on the smoke TFDS output with a temporary GCS prefix, then delete that temporary prefix.
+
 ## 2026-06-13T08:31:13Z - a1001 smoke relaunch after TFDS GCS patch
 
 Goal:
