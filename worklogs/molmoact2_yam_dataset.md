@@ -533,7 +533,8 @@ Analysis:
 - This is slower than remote `gsutil -m rsync`, but it avoids persisting sensitive GCS credentials on a1001. It can be validated against the smoke TFDS folder before the full conversion output is uploaded.
 
 Next:
-- Commit the helper and validate it on the smoke TFDS output with a temporary GCS prefix, then delete that temporary prefix.
+- Validated the helper on the smoke TFDS output: uploaded 3 files / 37.79 MiB to `gs://pi0-cot/OXE/_tmp_molmoact2_yam_smoke_29036082`, verified sizes, and removed the temporary prefix.
+- Launch the full conversion; final upload can use the validated local streaming route if remote GCS credentials remain unavailable.
 
 ## 2026-06-13T08:31:13Z - a1001 smoke relaunch after TFDS GCS patch
 
