@@ -944,6 +944,46 @@ Analysis:
 Next:
 - Continue monitoring through top-camera videos and TFDS generation startup.
 
+## 2026-06-13T17:38:00Z - final top-camera chunk reached
+
+Goal:
+- Confirm the raw snapshot download reached the final top-camera video chunk.
+
+Hypothesis:
+- Moving from `videos/observation.images.top/chunk-000` to `chunk-001` means all remaining raw-download work is in the final video chunk group.
+
+Change:
+- No code change; monitoring job `29039410`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: c7423acf21e85127f601402fb102183d5888a0a7
+- implementation_commit: c7423acf21e85127f601402fb102183d5888a0a7
+- push/pull: local worklog update pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `b7771176373d42b0f542ad8335c127901c8ee263`; running job uses that commit
+
+Command / Job:
+- command: `squeue`, `du -sh`, quota check, filtered log grep, and stdout tail for job `29039410`
+- job_id: 29039410
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29039410.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: running
+- metrics/artifacts: after about 7h36m on relaunch, raw directory is about 1.6T; stdout shows `[7955/9443]` at `top/chunk-000/file-999.mp4` followed by `[7956/9443]` at `top/chunk-001/file-000.mp4`.
+- key evidence: filtered error scan shows no new retry exhaustion, traceback, or exception lines; quota reports about 3.21T used.
+
+Analysis:
+- The raw download is in the last video chunk group. Storage remains far below the 13T effective working ceiling.
+
+Next:
+- Continue monitoring until raw download completes and TFDS generation starts.
+
 ## 2026-06-13T15:10:00Z - two-hour retry relaunch checkpoint
 
 Goal:
