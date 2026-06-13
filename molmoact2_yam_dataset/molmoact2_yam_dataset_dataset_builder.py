@@ -14,8 +14,11 @@ import numpy as np
 from PIL import Image
 import pyarrow.parquet as pq
 import tensorflow_datasets as tfds
+from tensorflow_datasets.core.utils import gcs_utils as tfds_gcs_utils
 
 from molmoact2_yam_dataset.conversion_utils import MultiThreadedDatasetBuilder
+
+tfds_gcs_utils._is_gcs_disabled = True  # Avoid unauthenticated TFDS GCS metadata probes on clusters.
 
 
 HF_REPO_ID = "allenai/MolmoAct2-BimanualYAM-Dataset"

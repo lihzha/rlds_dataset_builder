@@ -494,3 +494,83 @@ Analysis:
 
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke.
+
+## 2026-06-13T08:28:07Z - a1001 smoke relaunch after localized utility
+
+Goal:
+- Run the smoke conversion past builder import and into episode generation.
+
+Hypothesis:
+- With the conversion utility localized, TFDS can instantiate the builder without OpenCV or agibot side effects.
+
+Change:
+- Relaunch from deployed commit `a7a891cf00853b47e592024bccfb92225e0400e3`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: a7a891cf00853b47e592024bccfb92225e0400e3
+- implementation_commit: a7a891cf00853b47e592024bccfb92225e0400e3
+- push/pull: deployed to a1001 detached worktree
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `a7a891cf00853b47e592024bccfb92225e0400e3`
+
+Command / Job:
+- command: `sbatch --partition=cpu --time=04:00:00 --cpus-per-task=16 --mem=64G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam_smoke,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke,MODE=smoke,MOLMOACT2_YAM_MAX_FILES=1,MOLMOACT2_YAM_MAX_EPISODES=2,MOLMOACT2_YAM_N_WORKERS=1,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=1 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29036038
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets_smoke/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_<jobid>.out and .err
+- artifacts: smoke TFDS shards, dataset_info.json, sample inspection in stdout
+
+Result:
+- status: failed
+- metrics/artifacts: no TFDS output; builder import reached TFDS DatasetBuilder initialization.
+- key evidence: Slurm job `29036038` failed after 55 seconds with a TensorFlow segfault inside TFDS `gcs_utils.gcs_dataset_info_files`, caused by unauthenticated GCS metadata probing on a1001.
+
+Analysis:
+- All previous failures before this point were dependency/package-path issues; this run should expose real schema or video decode behavior.
+
+Next:
+- Disable TFDS public GCS metadata lookup for this local custom builder before TFDS instantiates it.
+
+## 2026-06-13T08:31:00Z - disable TFDS metadata GCS probe
+
+Goal:
+- Prevent TFDS from querying `gs://tfds-data/dataset_info` while building the local custom dataset on unauthenticated a1001 nodes.
+
+Hypothesis:
+- Setting `tensorflow_datasets.core.utils.gcs_utils._is_gcs_disabled = True` at module import time will skip the metadata-bucket lookup and avoid the TensorFlow GCS segfault.
+
+Change:
+- Added a module-level TFDS GCS disable in `molmoact2_yam_dataset_dataset_builder.py`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: a7a891cf00853b47e592024bccfb92225e0400e3
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 at `a7a891cf00853b47e592024bccfb92225e0400e3`
+
+Command / Job:
+- command: `python3 -m py_compile molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py`
+- job_id: n/a
+- run_dir: n/a
+- logs: terminal output
+- artifacts: builder GCS-probe patch
+
+Result:
+- status: passed
+- metrics/artifacts: builder syntax check passed with TFDS GCS disabled.
+- key evidence: `python3 -m py_compile molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py` exited 0.
+
+Analysis:
+- The segfault occurred before generation, during TFDS metadata initialization. This patch is scoped to the custom builder import path and does not add Google credentials to a1001.
+
+Next:
+- Syntax-check, commit, push, deploy, and relaunch smoke.
