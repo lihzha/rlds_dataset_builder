@@ -536,6 +536,87 @@ Analysis:
 Next:
 - Submit the full conversion on `cpu_long` with enough workers for the 76M-frame dataset, then actively monitor logs, storage, and output artifacts.
 
+## 2026-06-13T08:47:40Z - full a1001 conversion launch
+
+Goal:
+- Build the full MolmoAct2 Bimanual YAM TFDS/RLDS dataset locally on a1001 storage.
+
+Hypothesis:
+- After smoke and expanded smoke validation, the full conversion should complete using regular HTTP HF downloads, TFDS GCS metadata disabled, and 24 conversion workers on a 32-CPU long CPU job.
+
+Change:
+- Launch from deployed commit `ab0e4556a0f630d3cb4c9aa1d5156ca5c3c98e34`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: ab0e4556a0f630d3cb4c9aa1d5156ca5c3c98e34
+- implementation_commit: ab0e4556a0f630d3cb4c9aa1d5156ca5c3c98e34
+- push/pull: deployed to a1001 detached worktree
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `ab0e4556a0f630d3cb4c9aa1d5156ca5c3c98e34`
+
+Command / Job:
+- command: `sbatch --partition=cpu_long --time=7-00:00:00 --cpus-per-task=32 --mem=256G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets,MODE=full,MOLMOACT2_YAM_N_WORKERS=24,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=24 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: n/a
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_<jobid>.out and .err
+- artifacts: full TFDS shards, dataset_info.json, post-build sample inspection
+
+Result:
+- status: failed
+- metrics/artifacts: no job launched.
+- key evidence: `sbatch` rejected the 256G request with `QOSMaxMemoryPerUser`; `sacctmgr -P show qos cpu_long` reports `MaxTRESPU=cpu=96,mem=176G`.
+
+Analysis:
+- Storage before launch is 1.558T used. The raw HF dataset is about 2.35T compressed and expected TFDS output is likely around 1-2T, staying below the user's effective 13T working limit while preserving a 2T reserve.
+- Final upload route is the validated local streaming helper if remote GCS auth remains unavailable.
+
+Next:
+- Relaunch full conversion with `--mem=160G`, below the `cpu_long` per-user memory cap.
+
+## 2026-06-13T08:50:00Z - full a1001 conversion relaunch under memory cap
+
+Goal:
+- Build the full MolmoAct2 Bimanual YAM TFDS/RLDS dataset locally on a1001 storage within `cpu_long` QOS limits.
+
+Hypothesis:
+- `--mem=160G` with 24 workers is below the `cpu_long` `mem=176G` cap and remains sufficient based on smoke memory use.
+
+Change:
+- Relaunch from deployed commit `ab0e4556a0f630d3cb4c9aa1d5156ca5c3c98e34` with the same source and worker settings but reduced memory.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: ab0e4556a0f630d3cb4c9aa1d5156ca5c3c98e34
+- implementation_commit: ab0e4556a0f630d3cb4c9aa1d5156ca5c3c98e34
+- push/pull: deployed to a1001 detached worktree
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `ab0e4556a0f630d3cb4c9aa1d5156ca5c3c98e34`
+
+Command / Job:
+- command: `sbatch --partition=cpu_long --time=7-00:00:00 --cpus-per-task=32 --mem=160G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets,MODE=full,MOLMOACT2_YAM_N_WORKERS=24,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=24 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29036322
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_<jobid>.out and .err
+- artifacts: full TFDS shards, dataset_info.json, post-build sample inspection
+
+Result:
+- status: running
+- metrics/artifacts: running on `cpu-00038`; snapshot download started.
+- key evidence: `squeue` shows job `29036322` running on `cpu_long` with 160G memory; stdout shows `Fetching 9443 files`.
+
+Analysis:
+- No active jobs are present before relaunch. Storage remains within the user budget.
+
+Next:
+- Submit, monitor queue/logs/storage, inspect artifacts after completion, then upload to `gs://pi0-cot/OXE/molmoact2_yam_dataset`.
+
 ## 2026-06-13T08:38:00Z - local streaming upload route
 
 Goal:
