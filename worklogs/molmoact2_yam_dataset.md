@@ -661,6 +661,46 @@ Analysis:
 Next:
 - Continue 15-minute monitoring during raw download; add another worklog checkpoint on failure, camera-stream transition, large storage jump, or TFDS generation start.
 
+## 2026-06-13T12:10:00Z - video chunk transition checkpoint
+
+Goal:
+- Confirm sustained video download remains healthy after completing the first left-camera video chunk.
+
+Hypothesis:
+- A clean transition from `videos/observation.images.left/chunk-000` to `chunk-001` indicates the sequential downloader is continuing through large video assets without rate-limit failure.
+
+Change:
+- No code change; monitoring job `29036366`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 462af74f69a8c8103422ee42581c9b21097d7283
+- implementation_commit: 462af74f69a8c8103422ee42581c9b21097d7283
+- push/pull: local worklog update pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `3b13e6c58c6c751832429d8e82f85a19e0d908ba`; running job uses that commit
+
+Command / Job:
+- command: `squeue`, `du -sh`, quota check, filtered log grep, and stdout tail for job `29036366`
+- job_id: 29036366
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29036366.out and .err
+- artifacts: partial raw snapshot
+
+Result:
+- status: running
+- metrics/artifacts: after about 2h59m, raw directory is about 373G; stdout shows `[4583/9443]` at `left/chunk-000/file-999.mp4` followed by `[4584/9443]` at `left/chunk-001/file-000.mp4`.
+- key evidence: filtered error scan still shows no new `HTTP Error 429`, retry exhaustion, traceback, or exception lines; quota reports about 1.95T used.
+
+Analysis:
+- The downloader has passed the first full 1,000-file video chunk. Storage remains far below the 13T effective working ceiling implied by the user's 15T total / 2T free constraint.
+
+Next:
+- Continue monitoring raw download. Next important milestones are completing left-camera videos, entering other camera streams, and starting TFDS generation.
+
 ## 2026-06-13T08:41:31Z - expanded smoke before full conversion
 
 Goal:
