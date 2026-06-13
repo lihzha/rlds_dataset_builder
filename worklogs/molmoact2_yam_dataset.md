@@ -205,3 +205,47 @@ Analysis:
 
 Next:
 - Syntax-check, commit, push, update the a1001 detached worktree, and rerun setup using the existing Python 3.9 venv.
+
+## 2026-06-13T08:03:45Z - a1001 environment verified
+
+Goal:
+- Verify the conversion runtime before downloading any raw MolmoAct2 YAM files.
+
+Hypothesis:
+- The patched setup wrapper at `c487a23e423ba45c1d9840e299387f65b4306d4b` provides all local-conversion dependencies, while GCS access may need a separate credential path.
+
+Change:
+- Ran the a1001 setup wrapper after deploying `c487a23e423ba45c1d9840e299387f65b4306d4b`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: c487a23e423ba45c1d9840e299387f65b4306d4b
+- implementation_commit: c487a23e423ba45c1d9840e299387f65b4306d4b
+- push/pull: pushed locally and deployed to a1001 detached worktree
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `c487a23e423ba45c1d9840e299387f65b4306d4b`
+
+Command / Job:
+- command: `ssh a1001 'cd /lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613 && NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha bash scripts/molmoact2_yam/setup_env_a1001.sh'`
+- command: `ssh a1001 'source /lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam/bin/activate && PYTHONUNBUFFERED=1 python - <<PY ... PY'`
+- command: `ssh a1001 '/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam/bin/gsutil ls gs://pi0-cot/OXE | head -5'`
+- job_id: n/a
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam
+- logs: terminal output
+- artifacts: verified conversion venv
+
+Result:
+- status: passed
+- metrics/artifacts: imports passed for TensorFlow 2.15.1, TFDS 4.9.3, PyArrow 15.0.2, HF Hub 0.33.0, and imageio-ffmpeg.
+- key evidence: `imageio_ffmpeg.get_ffmpeg_exe()` resolved to the venv binary; local workstation `gsutil ls gs://pi0-cot/OXE` works, but a1001 `gsutil` returns 401 anonymous.
+
+Analysis:
+- The conversion environment is usable for local a1001 TFDS generation.
+- a1001 does not currently have GCS credentials under `/home/lzha/.config/gcloud` or `~/.boto`; upload and TensorFlow GCS reads from a1001 are blocked until credentials are provided or another upload route is chosen.
+- No raw dataset files have been downloaded yet; the venv is about 1.9G.
+
+Next:
+- Run a one-file, two-episode smoke conversion on a1001 local storage. Do not launch the full conversion until GCS upload auth is resolved.
