@@ -537,6 +537,47 @@ Analysis:
 Next:
 - Commit and deploy the tolerant decoder patch, validate it against the failing parquet file on a1001, then relaunch the full build using the existing raw snapshot.
 
+## 2026-06-14T00:25:20Z - short-video patch relaunch
+
+Goal:
+- Relaunch the full conversion after validating the tolerant decoder patch on the failing video.
+
+Hypothesis:
+- With incomplete camera rows filtered at episode granularity, the full build can progress past `chunk-000/file-023.parquet` and finish using the already-downloaded raw snapshot.
+
+Change:
+- Committed `f48ce2d` and deployed it to `/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: f7a38c5
+- implementation_commit: f48ce2d
+- push/pull: pushed to origin and checked out detached on a1001
+- changed_files: molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `f48ce2d`
+
+Command / Job:
+- command: `python - <<'PY' ... _decode_video_jpegs(file-023.mp4, [9421, 9422, 9423]) ... PY`
+- command: `sbatch --partition=cpu_long --time=7-00:00:00 --cpus-per-task=32 --mem=160G --export=ALL,...,MODE=full,MOLMOACT2_YAM_N_WORKERS=24,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=24,HF_SNAPSHOT_MAX_WORKERS=1,HF_DOWNLOAD_RETRIES=12,HF_DOWNLOAD_RETRY_SLEEP=60 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29053288
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29053288.{out,err}
+- artifacts: expected full TFDS dataset under /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset/1.0.0
+
+Result:
+- status: running
+- metrics/artifacts: targeted decoder check passed; job `29053288` submitted.
+- key evidence: decoder printed `decoded_keys [9421]` and `decoded_count 1` instead of raising on missing frames `9422` and `9423`.
+
+Analysis:
+- The patch handles the observed short-video failure mode. The relaunch should not need to download 2.2T again because the raw snapshot is already present.
+
+Next:
+- Monitor job `29053288` through raw snapshot verification, TFDS generation, sample inspection, GCS upload, ego-lap visualization, and cleanup.
+
 ## 2026-06-13T09:05:00Z - throttle full HF download after 429 failure
 
 Goal:
