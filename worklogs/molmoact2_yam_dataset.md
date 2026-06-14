@@ -578,6 +578,49 @@ Analysis:
 Next:
 - Monitor job `29053288` through raw snapshot verification, TFDS generation, sample inspection, GCS upload, ego-lap visualization, and cleanup.
 
+## 2026-06-14T00:44:10Z - partial raw file detection
+
+Goal:
+- Stop the relaunch before it produced an incomplete dataset and fix raw-file validation.
+
+Hypothesis:
+- The earlier interrupted Hugging Face downloads left nonzero but incomplete MP4 files in the raw snapshot. The downloader skipped those files because it only checked for nonzero local size, causing the builder to skip many episodes with missing decoded frames.
+
+Change:
+- Canceled job `29053288`.
+- Patched `scripts/molmoact2_yam/download_hf_snapshot.py` to query Hugging Face file metadata with `repo_info(..., files_metadata=True)`, compare local byte sizes against expected sizes, unlink mismatches, and redownload them with retries.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 0f847cb
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: scripts/molmoact2_yam/download_hf_snapshot.py, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree still at `f48ce2d` until this patch is deployed
+
+Command / Job:
+- command: `scancel 29053288`
+- command: `python3 -m py_compile scripts/molmoact2_yam/download_hf_snapshot.py`
+- job_id: 29053288
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29053288.{out,err}
+- artifacts: canceled partial TFDS scratch, raw snapshot pending repair
+
+Result:
+- status: passed
+- metrics/artifacts: job `29053288` canceled after TFDS generation started; syntax check passed for the downloader patch.
+- key evidence: logs showed many `Missing ... decoded frames` and `Skipping episode ... rows lack a complete camera triplet` messages across multiple chunk-000 MP4s; `sacct` reports `CANCELLED by 158351`.
+
+Analysis:
+- This should be repaired at the raw-file layer, not by accepting massive episode loss. Size verification is the right guardrail because HF metadata exposes expected byte sizes for all 9443 files.
+- Storage is still within budget, around 4.1T used under `/lustre/.../lzha`.
+
+Next:
+- Commit and deploy the size-verifying downloader, rerun the full job so mismatched raw files are redownloaded, then monitor TFDS generation again.
+
 ## 2026-06-13T09:05:00Z - throttle full HF download after 429 failure
 
 Goal:

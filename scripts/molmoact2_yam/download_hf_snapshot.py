@@ -56,6 +56,7 @@ def is_retryable_error(exc: BaseException) -> bool:
         "504",
         "Connection aborted",
         "Connection reset",
+        "Downloaded size mismatch",
         "EOF occurred",
         "ProtocolError",
         "Read timed out",
@@ -87,23 +88,47 @@ def download_with_retry(
     raw_dir: Path,
     retries: int,
     retry_sleep: float,
+    expected_size: int | None = None,
     force: bool = False,
 ) -> None:
     target = raw_dir / filename
-    if not force and target.exists() and target.stat().st_size > 0:
-        print(f"skipping existing {filename}", flush=True)
-        return
+    if target.exists() and not force:
+        local_size = target.stat().st_size
+        if expected_size is None and local_size > 0:
+            print(f"skipping existing {filename}", flush=True)
+            return
+        if expected_size is not None and local_size == expected_size:
+            print(f"skipping existing {filename}", flush=True)
+            return
+        print(
+            f"redownloading {filename}; local size {local_size} != expected {expected_size}",
+            flush=True,
+        )
 
     for attempt in range(retries + 1):
         try:
+            if target.exists():
+                local_size = target.stat().st_size
+                if force or expected_size is None or local_size != expected_size:
+                    target.unlink()
             hf_hub_download(
                 repo_id=repo_id,
                 repo_type="dataset",
                 filename=filename,
                 local_dir=str(raw_dir),
+                force_download=force,
             )
+            if not target.exists() or target.stat().st_size == 0:
+                raise RuntimeError(f"Downloaded file is missing or empty: {filename}")
+            if expected_size is not None and target.stat().st_size != expected_size:
+                raise RuntimeError(
+                    f"Downloaded size mismatch for {filename}: "
+                    f"got {target.stat().st_size}, expected {expected_size}"
+                )
             return
         except Exception as exc:  # noqa: BLE001 - preserve HF exception context in logs.
+            if target.exists() and expected_size is not None and target.stat().st_size != expected_size:
+                target.unlink()
             if attempt >= retries or not is_retryable_error(exc):
                 raise
             sleep_s = retry_sleep * (2 ** min(attempt, 4))
@@ -136,7 +161,9 @@ def main() -> None:
     args.raw_dir.mkdir(parents=True, exist_ok=True)
     if args.full:
         if args.max_workers <= 1:
-            files = HfApi().list_repo_files(args.repo_id, repo_type="dataset")
+            repo_info = HfApi().repo_info(args.repo_id, repo_type="dataset", files_metadata=True)
+            files = [sibling.rfilename for sibling in repo_info.siblings]
+            expected_sizes = {sibling.rfilename: sibling.size for sibling in repo_info.siblings}
             for idx, filename in enumerate(files, start=1):
                 print(f"[{idx}/{len(files)}] downloading {filename}", flush=True)
                 download_with_retry(
@@ -145,6 +172,7 @@ def main() -> None:
                     raw_dir=args.raw_dir,
                     retries=args.retries,
                     retry_sleep=args.retry_sleep,
+                    expected_size=expected_sizes.get(filename),
                     force=args.force,
                 )
             return
@@ -157,6 +185,8 @@ def main() -> None:
         return
 
     chunks = [int(x) for x in args.chunks.split(",") if x.strip()]
+    repo_info = HfApi().repo_info(args.repo_id, repo_type="dataset", files_metadata=True)
+    expected_sizes = {sibling.rfilename: sibling.size for sibling in repo_info.siblings}
     for pattern in sample_patterns(args.max_files, chunks):
         print(f"downloading {pattern}")
         download_with_retry(
@@ -165,6 +195,7 @@ def main() -> None:
             raw_dir=args.raw_dir,
             retries=args.retries,
             retry_sleep=args.retry_sleep,
+            expected_size=expected_sizes.get(pattern),
             force=args.force,
         )
 
