@@ -663,6 +663,46 @@ Analysis:
 Next:
 - Commit and deploy this mapping fix, run a targeted conversion on a multi-episode file, then relaunch the full build.
 
+## 2026-06-14T01:12:30Z - episode mapping validation
+
+Goal:
+- Validate the `meta/episodes` video mapping fix before another full build.
+
+Hypothesis:
+- A multi-episode data file whose videos live in different video file indices should generate complete episodes when the builder uses the metadata mapping.
+
+Change:
+- Deployed `b4c397d` to the a1001 worktree and ran `_generate_examples` on `data/chunk-000/file-001.parquet`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 5cb0dd0
+- implementation_commit: b4c397d
+- push/pull: pushed to origin and checked out detached on a1001
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `b4c397d`
+
+Command / Job:
+- command: `python - <<'PY' ... for key, example in _generate_examples([file-001.parquet]) ... PY`
+- job_id: n/a
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+- logs: terminal output
+- artifacts: no persisted artifact; targeted generation summary only
+
+Result:
+- status: passed
+- metrics/artifacts: `count 5`, `steps 10074`
+- key evidence: generated episodes `000001` through `000005` with expected AI2 block-arrangement language strings and no missing-frame skip messages.
+
+Analysis:
+- This confirms the previous broad skip behavior was due to incorrect video indexing, not corrupt raw files.
+
+Next:
+- Remove canceled TFDS scratch and relaunch the full conversion from `b4c397d`.
+
 ## 2026-06-13T09:05:00Z - throttle full HF download after 429 failure
 
 Goal:
