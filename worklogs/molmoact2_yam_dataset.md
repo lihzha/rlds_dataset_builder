@@ -621,6 +621,48 @@ Analysis:
 Next:
 - Commit and deploy the size-verifying downloader, rerun the full job so mismatched raw files are redownloaded, then monitor TFDS generation again.
 
+## 2026-06-14T01:00:00Z - episode video mapping fix
+
+Goal:
+- Fix the broad missing-frame skips observed after the short-video tolerance patch.
+
+Hypothesis:
+- LeRobot v3 stores per-episode camera video locations in `meta/episodes`; data parquet chunk/file indices do not necessarily match the camera video chunk/file indices. The builder must use the recorded `videos/<camera>/chunk_index`, `file_index`, and `from_timestamp` fields for each episode.
+
+Change:
+- Added `meta/episodes` loading to map each episode to its top/left/right video file and start frame.
+- Changed generation to request video frames as `round(from_timestamp * fps) + frame_index` per episode and camera.
+- Removed the incorrect `_split_paths` requirement that each data file have same-index camera videos.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 5cb0dd0
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree at `5cb0dd0` until this patch is deployed
+
+Command / Job:
+- command: `python3 -m py_compile molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py`
+- job_id: n/a
+- run_dir: n/a
+- logs: terminal output
+- artifacts: patched builder
+
+Result:
+- status: passed
+- metrics/artifacts: local compile check passed.
+- key evidence: parquet inspection showed, for example, data `chunk-000/file-023` episode 190 maps top camera to video `chunk-000/file-008` at timestamp `871.333...`, left camera to video `file-008` at `437.333...`, and right camera to video `file-006` at `41.833...`.
+
+Analysis:
+- The raw files match HF byte sizes, so the previous missing-frame behavior was not from partial downloads. It was from using row positions in the data parquet as if they indexed same-numbered MP4 files.
+
+Next:
+- Commit and deploy this mapping fix, run a targeted conversion on a multi-episode file, then relaunch the full build.
+
 ## 2026-06-13T09:05:00Z - throttle full HF download after 429 failure
 
 Goal:

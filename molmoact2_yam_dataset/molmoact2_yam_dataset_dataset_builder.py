@@ -24,6 +24,7 @@ tfds_gcs_utils._is_gcs_disabled = True  # Avoid unauthenticated TFDS GCS metadat
 HF_REPO_ID = "allenai/MolmoAct2-BimanualYAM-Dataset"
 IMAGE_SIZE = (224, 224)
 SOURCE_IMAGE_SIZE = (640, 360)
+DEFAULT_FPS = 30.0
 VIDEO_KEYS = {
     "top_image": "observation.images.top",
     "left_image": "observation.images.left",
@@ -217,6 +218,40 @@ def _load_task_maps(raw_root: Path) -> tuple[dict[int, str], dict[int, str]]:
     return task_by_index, annotated_by_episode
 
 
+def _load_episode_video_maps(raw_root: Path) -> dict[int, dict[str, tuple[Path, int]]]:
+    """Map episode index to each camera video path and frame offset."""
+    with open(raw_root / "meta" / "info.json", "r") as f:
+        info = json.load(f)
+    fps = float(info.get("fps", DEFAULT_FPS))
+    columns = ["episode_index"]
+    for video_key in VIDEO_KEYS.values():
+        columns.extend(
+            [
+                f"videos/{video_key}/chunk_index",
+                f"videos/{video_key}/file_index",
+                f"videos/{video_key}/from_timestamp",
+            ]
+        )
+
+    episode_video_maps: dict[int, dict[str, tuple[Path, int]]] = {}
+    episode_files = sorted((raw_root / "meta" / "episodes").glob("chunk-*/file-*.parquet"))
+    for episode_file in episode_files:
+        table = pq.read_table(episode_file, columns=columns)
+        cols = table.to_pydict()
+        for row_idx, ep_idx in enumerate(cols["episode_index"]):
+            camera_refs: dict[str, tuple[Path, int]] = {}
+            for obs_key, video_key in VIDEO_KEYS.items():
+                chunk_idx = int(cols[f"videos/{video_key}/chunk_index"][row_idx])
+                file_idx = int(cols[f"videos/{video_key}/file_index"][row_idx])
+                from_timestamp = float(cols[f"videos/{video_key}/from_timestamp"][row_idx])
+                camera_refs[obs_key] = (
+                    _matching_video_path(raw_root, video_key, chunk_idx, file_idx),
+                    int(round(from_timestamp * fps)),
+                )
+            episode_video_maps[int(ep_idx)] = camera_refs
+    return episode_video_maps
+
+
 def _language_for(
     episode_index: int,
     task_index: int,
@@ -236,6 +271,7 @@ def _read_column(table: pq.ParquetFile | Any, name: str) -> list[Any]:
 def _generate_examples(paths: list[str]) -> Iterator[tuple[str, dict[str, Any]]]:
     raw_root = _raw_root()
     task_by_index, annotated_by_episode = _load_task_maps(raw_root)
+    episode_video_maps = _load_episode_video_maps(raw_root)
     max_episodes = _env_int("MOLMOACT2_YAM_MAX_EPISODES")
     yielded = 0
 
@@ -249,35 +285,53 @@ def _generate_examples(paths: list[str]) -> Iterator[tuple[str, dict[str, Any]]]
         task_index = _read_column(table, "task_index")
         frame_index = _read_column(table, "frame_index")
 
-        num_rows = len(action)
-        frame_positions = list(range(num_rows))
-        frame_sets = {
-            obs_key: _decode_video_jpegs(
-                _matching_video_path(raw_root, video_key, chunk_idx, file_idx),
-                frame_positions,
-            )
-            for obs_key, video_key in VIDEO_KEYS.items()
-        }
-        complete_frame_positions = set(frame_positions)
-        for decoded_frames in frame_sets.values():
-            complete_frame_positions.intersection_update(decoded_frames.keys())
-        if not complete_frame_positions:
-            print(f"Skipping {parquet_path}; no complete camera frames decoded")
-            continue
-
         rows_by_episode: dict[int, list[int]] = defaultdict(list)
         for row_idx, ep_idx in enumerate(episode_index):
             rows_by_episode[int(ep_idx)].append(row_idx)
+
+        valid_rows_by_episode: dict[int, list[int]] = {}
+        frame_requests: dict[str, dict[Path, set[int]]] = {obs_key: defaultdict(set) for obs_key in VIDEO_KEYS}
+        row_frame_refs: dict[str, dict[int, tuple[Path, int]]] = {obs_key: {} for obs_key in VIDEO_KEYS}
 
         for ep_idx in sorted(rows_by_episode):
             row_indices = rows_by_episode[ep_idx]
             if not row_indices:
                 continue
-            if any(row_idx not in complete_frame_positions for row_idx in row_indices):
-                missing_count = sum(row_idx not in complete_frame_positions for row_idx in row_indices)
+            camera_refs = episode_video_maps.get(int(ep_idx))
+            if camera_refs is None:
+                print(f"Skipping episode {int(ep_idx)} in {parquet_path}; missing meta/episodes video mapping")
+                continue
+            missing_videos = [str(video_path) for video_path, _ in camera_refs.values() if not video_path.exists()]
+            if missing_videos:
+                print(f"Skipping episode {int(ep_idx)} in {parquet_path}; missing videos: {missing_videos}")
+                continue
+            valid_rows_by_episode[int(ep_idx)] = row_indices
+            for row_idx in row_indices:
+                source_frame = int(frame_index[row_idx])
+                for obs_key, (video_path, start_frame) in camera_refs.items():
+                    video_frame = start_frame + source_frame
+                    frame_requests[obs_key][video_path].add(video_frame)
+                    row_frame_refs[obs_key][row_idx] = (video_path, video_frame)
+
+        decoded_frames: dict[str, dict[tuple[Path, int], bytes]] = {obs_key: {} for obs_key in VIDEO_KEYS}
+        for obs_key, requests_by_video in frame_requests.items():
+            for video_path, requested_frames in requests_by_video.items():
+                frames = _decode_video_jpegs(video_path, sorted(requested_frames))
+                for frame_idx, image in frames.items():
+                    decoded_frames[obs_key][(video_path, frame_idx)] = image
+
+        for ep_idx in sorted(valid_rows_by_episode):
+            row_indices = valid_rows_by_episode[ep_idx]
+            missing_rows = []
+            for row_idx in row_indices:
+                for obs_key in VIDEO_KEYS:
+                    if row_frame_refs[obs_key][row_idx] not in decoded_frames[obs_key]:
+                        missing_rows.append(row_idx)
+                        break
+            if missing_rows:
                 print(
                     f"Skipping episode {int(ep_idx)} in {parquet_path}; "
-                    f"{missing_count}/{len(row_indices)} rows lack a complete camera triplet"
+                    f"{len(missing_rows)}/{len(row_indices)} rows lack a decoded camera triplet"
                 )
                 continue
             first_row = row_indices[0]
@@ -293,9 +347,9 @@ def _generate_examples(paths: list[str]) -> Iterator[tuple[str, dict[str, Any]]]
                 steps.append(
                     {
                         "observation": {
-                            "top_image": frame_sets["top_image"][row_idx],
-                            "left_image": frame_sets["left_image"][row_idx],
-                            "right_image": frame_sets["right_image"][row_idx],
+                            "top_image": decoded_frames["top_image"][row_frame_refs["top_image"][row_idx]],
+                            "left_image": decoded_frames["left_image"][row_frame_refs["left_image"][row_idx]],
+                            "right_image": decoded_frames["right_image"][row_frame_refs["right_image"][row_idx]],
                             "state": np.asarray(state[row_idx], dtype=np.float32),
                         },
                         "action": np.asarray(action[row_idx], dtype=np.float32),
@@ -407,13 +461,7 @@ class Molmoact2YamDataset(MultiThreadedDatasetBuilder):
 
         usable = []
         for path in parquet_files:
-            chunk_idx, file_idx = _parse_chunk_file(path)
-            videos = [_matching_video_path(raw_root, key, chunk_idx, file_idx) for key in VIDEO_KEYS.values()]
-            if all(v.exists() for v in videos):
-                usable.append(str(path))
-            else:
-                missing = [str(v) for v in videos if not v.exists()]
-                print(f"Skipping {path}; missing videos: {missing}")
+            usable.append(str(path))
 
         max_files = _env_int("MOLMOACT2_YAM_MAX_FILES")
         if max_files is not None:
