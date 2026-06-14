@@ -49,6 +49,13 @@ def _env_int(name: str, default: int | None = None) -> int | None:
     return int(value)
 
 
+def _env_float(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value is None or value == "":
+        return default
+    return float(value)
+
+
 def _raw_root() -> Path:
     raw_dir = os.environ.get("MOLMOACT2_YAM_RAW_DIR")
     if not raw_dir:
@@ -273,6 +280,8 @@ def _generate_examples(paths: list[str]) -> Iterator[tuple[str, dict[str, Any]]]
     task_by_index, annotated_by_episode = _load_task_maps(raw_root)
     episode_video_maps = _load_episode_video_maps(raw_root)
     max_episodes = _env_int("MOLMOACT2_YAM_MAX_EPISODES")
+    max_trailing_missing_rows = _env_int("MOLMOACT2_YAM_MAX_TRAILING_MISSING_ROWS", 30)
+    max_trailing_missing_fraction = _env_float("MOLMOACT2_YAM_MAX_TRAILING_MISSING_FRACTION", 0.05)
     yielded = 0
 
     for parquet_name in paths:
@@ -329,11 +338,36 @@ def _generate_examples(paths: list[str]) -> Iterator[tuple[str, dict[str, Any]]]
                         missing_rows.append(row_idx)
                         break
             if missing_rows:
-                print(
-                    f"Skipping episode {int(ep_idx)} in {parquet_path}; "
-                    f"{len(missing_rows)}/{len(row_indices)} rows lack a decoded camera triplet"
+                missing_set = set(missing_rows)
+                first_missing_pos = next(
+                    (i for i, row_idx in enumerate(row_indices) if row_idx in missing_set),
+                    None,
                 )
-                continue
+                trailing_missing = (
+                    first_missing_pos is not None
+                    and first_missing_pos > 0
+                    and set(row_indices[first_missing_pos:]) == missing_set
+                )
+                missing_fraction = len(missing_rows) / len(row_indices)
+                can_truncate = (
+                    trailing_missing
+                    and max_trailing_missing_rows is not None
+                    and len(missing_rows) <= max_trailing_missing_rows
+                    and missing_fraction <= max_trailing_missing_fraction
+                )
+                if can_truncate:
+                    print(
+                        f"Truncating episode {int(ep_idx)} in {parquet_path}; "
+                        f"dropping {len(missing_rows)}/{len(row_indices)} trailing rows "
+                        "without a decoded camera triplet"
+                    )
+                    row_indices = row_indices[:first_missing_pos]
+                else:
+                    print(
+                        f"Skipping episode {int(ep_idx)} in {parquet_path}; "
+                        f"{len(missing_rows)}/{len(row_indices)} rows lack a decoded camera triplet"
+                    )
+                    continue
             first_row = row_indices[0]
             language_instruction = _language_for(
                 ep_idx,

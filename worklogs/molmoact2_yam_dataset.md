@@ -1559,6 +1559,48 @@ Analysis:
 Next:
 - Disable TFDS public GCS metadata lookup for this local custom builder before TFDS instantiates it.
 
+## 2026-06-14T09:37:00Z - truncate one-frame terminal video shortages
+
+Goal:
+- Prevent the full MolmoAct2 YAM build from dropping entire episodes when an upstream camera MP4 is one terminal frame shorter than parquet metadata.
+
+Hypothesis:
+- The missing-frame lines from job `29053602` are terminal off-by-one video shortages: requested frame indices equal the duration-derived MP4 frame count, so retaining the episode with the final unmatched row removed is more faithful than skipping the whole episode.
+
+Change:
+- Canceled full job `29053602` after it logged 4 skipped episodes and 5 one-frame decode misses.
+- Added guarded suffix truncation in `molmoact2_yam_dataset_dataset_builder.py`: only missing rows that form a small trailing suffix are dropped; internal or large missing spans still skip the episode.
+- Documented `MOLMOACT2_YAM_MAX_TRAILING_MISSING_ROWS` and `MOLMOACT2_YAM_MAX_TRAILING_MISSING_FRACTION`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: a1377bf632cf13410c4548ad766321ee0899b41b
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py, molmoact2_yam_dataset/README.md, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 full job used `b4c397d9de171316f07dc808a75c819745f8ce73`; job `29053602` canceled before finalization
+
+Command / Job:
+- command: `scancel 29053602`
+- job_id: 29053602
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29053602.out and .err
+- artifacts: canceled incomplete TFDS temp directory, pending cleanup before relaunch
+
+Result:
+- status: patching
+- metrics/artifacts: job had reached 396G TFDS temp output, MaxRSS about 52G, and /lustre usage about 5.36T before cancellation.
+- key evidence: episodes 7163, 7133, 7315, and 7277 each lacked only 1 terminal camera frame; affected requested frame indices matched the MP4 duration-derived frame count.
+
+Analysis:
+- This is not OOM or a corrupt raw download. It is a small terminal camera/video length mismatch in the released dataset metadata. Skipping whole episodes would unnecessarily remove thousands of valid steps.
+
+Next:
+- Commit and deploy the truncation patch, validate one previously skipped file, remove canceled incomplete TFDS output, and relaunch the full build.
+
 ## 2026-06-13T08:31:00Z - disable TFDS metadata GCS probe
 
 Goal:

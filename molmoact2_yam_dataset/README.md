@@ -17,3 +17,11 @@ Smoke runs can limit the number of source parquet/video file triplets:
 export MOLMOACT2_YAM_MAX_FILES=1
 export MOLMOACT2_YAM_MAX_EPISODES=4
 ```
+
+Some upstream MP4s are one frame shorter than the corresponding parquet
+episode tail. The builder truncates only a small missing suffix by default:
+
+```bash
+export MOLMOACT2_YAM_MAX_TRAILING_MISSING_ROWS=30
+export MOLMOACT2_YAM_MAX_TRAILING_MISSING_FRACTION=0.05
+```
