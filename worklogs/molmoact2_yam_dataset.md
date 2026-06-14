@@ -495,6 +495,49 @@ Analysis:
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke.
 
+## 2026-06-14T09:55:00Z - relaunch full build with terminal truncation
+
+Goal:
+- Relaunch the full MolmoAct2 YAM TFDS conversion without dropping full episodes for one-frame terminal video shortages.
+
+Hypothesis:
+- Commit `4f5d2b1fa4ea9a99125e19c8e78f13c46495ed77` will convert the previously affected episodes by truncating only the unavailable final row, while still rejecting internal or large missing camera spans.
+
+Change:
+- Pushed and deployed `4f5d2b1fa4ea9a99125e19c8e78f13c46495ed77` to the a1001 detached worktree.
+- Killed an orphaned validation probe process and ffmpeg process from the long targeted decode attempt.
+- Removed the canceled incomplete TFDS output directory `/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset`.
+- Relaunched the full build with explicit `MOLMOACT2_YAM_MAX_TRAILING_MISSING_ROWS=30` and `MOLMOACT2_YAM_MAX_TRAILING_MISSING_FRACTION=0.05`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: a1377bf632cf13410c4548ad766321ee0899b41b
+- implementation_commit: 4f5d2b1fa4ea9a99125e19c8e78f13c46495ed77
+- push/pull: pushed to GitHub and fetched on a1001
+- changed_files: molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py, molmoact2_yam_dataset/README.md, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree detached at `4f5d2b1fa4ea9a99125e19c8e78f13c46495ed77`
+
+Command / Job:
+- command: `sbatch --partition=cpu_long --time=7-00:00:00 --cpus-per-task=32 --mem=160G --export=ALL,NFS_ROOT=/lustre/fsw/portfolios/nvr/users/lzha,CODE_DIR=/lustre/fsw/portfolios/nvr/users/lzha/src/worktrees/rlds_dataset_builder/molmoact2-yam-20260613,ENV_DIR=/lustre/fsw/portfolios/nvr/users/lzha/envs/rlds_molmoact2_yam,RAW_DIR=/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam,TFDS_DATA_DIR=/lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets,MODE=full,MOLMOACT2_YAM_N_WORKERS=24,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=24,MOLMOACT2_YAM_MAX_TRAILING_MISSING_ROWS=30,MOLMOACT2_YAM_MAX_TRAILING_MISSING_FRACTION=0.05,HF_SNAPSHOT_MAX_WORKERS=1,HF_DOWNLOAD_RETRIES=12,HF_DOWNLOAD_RETRY_SLEEP=60 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29061545
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29061545.out and .err
+- artifacts: full TFDS dataset pending
+
+Result:
+- status: running
+- metrics/artifacts: job started immediately on `cpu-00112`; storage cleanup completed before relaunch.
+- key evidence: targeted metadata check showed episodes 7163, 7133, 7315, and 7277 all satisfy the truncation guard with exactly one trailing row dropped.
+
+Analysis:
+- The relaunch preserves nearly all data for the observed terminal MP4-shortage cases and avoids silently omitting full episodes.
+
+Next:
+- Monitor `29061545`; verify truncation messages replace skipped-episode messages for terminal one-frame shortages, then inspect final TFDS artifacts before upload.
+
 ## 2026-06-14T00:18:03Z - full build short-video failure
 
 Goal:
