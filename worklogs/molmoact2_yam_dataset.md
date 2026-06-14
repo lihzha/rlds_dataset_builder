@@ -495,6 +495,46 @@ Analysis:
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke.
 
+## 2026-06-14T18:34:00Z - truncation patch validated at previous failure point
+
+Goal:
+- Confirm that full job `29061545` handles the previously observed terminal one-frame video shortages without dropping full episodes.
+
+Hypothesis:
+- The relaunch should reproduce the same missing decoded frame events around chunk-000 files 808, 813, 827, and 832, but emit `Truncating episode` messages and no `Skipping episode` messages.
+
+Change:
+- Monitored `29061545` through elapsed time `08:47:27`, matching the previous canceled job's failure region.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: b2ad565e
+- implementation_commit: 4f5d2b1fa4ea9a99125e19c8e78f13c46495ed77
+- push/pull: active job already running from deployed detached commit `4f5d2b1fa4ea9a99125e19c8e78f13c46495ed77`
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree detached at `4f5d2b1fa4ea9a99125e19c8e78f13c46495ed77`
+
+Command / Job:
+- command: monitor grep for `Missing`, `Truncating`, and `Skipping` in `/lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29061545.out`
+- job_id: 29061545
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29061545.out and .err
+- artifacts: active incomplete TFDS temp output
+
+Result:
+- status: passed checkpoint
+- metrics/artifacts: `missing=5`, `truncating=4`, `skipping=0`; TFDS output 396G; MaxRSS about 51.4G; /lustre usage about 6.444T.
+- key evidence: episodes 7163, 7133, 7277, and 7315 each dropped exactly one trailing row and continued.
+
+Analysis:
+- The patch addresses the known data/video tail mismatch without silently omitting the affected episodes. Continue monitoring for any internal missing-frame cases, resource issues, or finalization failures.
+
+Next:
+- Continue monitoring `29061545` until completion, then inspect TFDS metadata and samples before streaming upload to GCS.
+
 ## 2026-06-14T09:55:00Z - relaunch full build with terminal truncation
 
 Goal:
