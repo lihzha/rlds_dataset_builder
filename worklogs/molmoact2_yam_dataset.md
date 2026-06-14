@@ -495,6 +495,48 @@ Analysis:
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke.
 
+## 2026-06-14T00:18:03Z - full build short-video failure
+
+Goal:
+- Diagnose and fix the first full TFDS generation failure after the raw MolmoAct2 YAM download completed.
+
+Hypothesis:
+- Some source parquet files contain rows beyond the end of one camera video. The builder should preserve complete episodes and skip only episodes missing any camera frame, rather than failing the whole conversion.
+
+Change:
+- Updated video decoding to return successfully decoded frames when ffmpeg reaches EOF before the parquet row count.
+- Added per-episode filtering so episodes with incomplete top/left/right camera triplets are skipped.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: f7a38c5
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: molmoact2_yam_dataset/molmoact2_yam_dataset_dataset_builder.py, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 full job `29039410` used `b7771176373d42b0f542ad8335c127901c8ee263` and failed during TFDS generation
+
+Command / Job:
+- command: `sbatch ... scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29039410
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29039410.{out,err}
+- artifacts: raw snapshot at /lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam
+
+Result:
+- status: failed
+- metrics/artifacts: raw download completed; TFDS output was only a scratch directory.
+- key evidence: stderr reported `RuntimeError: Missing 9548 decoded frames from .../videos/observation.images.top/chunk-000/file-023.mp4; first missing=[9422, 9423, 9424, 9425, 9426]`.
+
+Analysis:
+- This is a data consistency issue, not a storage or Slurm failure. Total `/lustre` usage stayed around 4.12T, within the user-requested 15T budget with at least 2T free.
+- The full raw snapshot also contains data parquet files in `chunk-003` without matching camera videos; those are already skipped at split discovery.
+
+Next:
+- Commit and deploy the tolerant decoder patch, validate it against the failing parquet file on a1001, then relaunch the full build using the existing raw snapshot.
+
 ## 2026-06-13T09:05:00Z - throttle full HF download after 429 failure
 
 Goal:

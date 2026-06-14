@@ -115,7 +115,12 @@ def _decode_video_jpegs(
     source_size: tuple[int, int] = SOURCE_IMAGE_SIZE,
     image_size: tuple[int, int] = IMAGE_SIZE,
 ) -> dict[int, bytes]:
-    """Decode selected frames from a LeRobot MP4 using ffmpeg rawvideo stdout."""
+    """Decode selected frames from a LeRobot MP4 using ffmpeg rawvideo stdout.
+
+    Some released MolmoAct2 files have parquet rows beyond the end of one
+    camera video. Return the successfully decoded prefix and let the caller
+    drop incomplete episodes instead of failing the full build.
+    """
     if not video_path.exists():
         raise FileNotFoundError(video_path)
     if not frame_indices:
@@ -151,9 +156,10 @@ def _decode_video_jpegs(
             if len(buf) == 0:
                 break
             if len(buf) != frame_bytes:
-                raise RuntimeError(
+                print(
                     f"Short frame while decoding {video_path}: got {len(buf)} bytes, expected {frame_bytes}"
                 )
+                break
             if frame_idx in needed:
                 image = Image.frombytes("RGB", (width, height), buf)
                 decoded[frame_idx] = _encode_jpeg(_resize_with_pad(image, image_size))
@@ -167,10 +173,10 @@ def _decode_video_jpegs(
     stderr = proc.stderr.read().decode("utf-8", errors="replace") if proc.stderr is not None else ""
     rc = proc.wait(timeout=30)
     if rc not in (0, 255) and len(decoded) != len(needed):
-        raise RuntimeError(f"ffmpeg failed for {video_path} with code {rc}: {stderr}")
+        print(f"ffmpeg stopped early for {video_path} with code {rc}: {stderr}")
     missing = sorted(needed.difference(decoded))
     if missing:
-        raise RuntimeError(f"Missing {len(missing)} decoded frames from {video_path}; first missing={missing[:5]}")
+        print(f"Missing {len(missing)} decoded frames from {video_path}; first missing={missing[:5]}")
     return decoded
 
 
@@ -252,6 +258,12 @@ def _generate_examples(paths: list[str]) -> Iterator[tuple[str, dict[str, Any]]]
             )
             for obs_key, video_key in VIDEO_KEYS.items()
         }
+        complete_frame_positions = set(frame_positions)
+        for decoded_frames in frame_sets.values():
+            complete_frame_positions.intersection_update(decoded_frames.keys())
+        if not complete_frame_positions:
+            print(f"Skipping {parquet_path}; no complete camera frames decoded")
+            continue
 
         rows_by_episode: dict[int, list[int]] = defaultdict(list)
         for row_idx, ep_idx in enumerate(episode_index):
@@ -260,6 +272,13 @@ def _generate_examples(paths: list[str]) -> Iterator[tuple[str, dict[str, Any]]]
         for ep_idx in sorted(rows_by_episode):
             row_indices = rows_by_episode[ep_idx]
             if not row_indices:
+                continue
+            if any(row_idx not in complete_frame_positions for row_idx in row_indices):
+                missing_count = sum(row_idx not in complete_frame_positions for row_idx in row_indices)
+                print(
+                    f"Skipping episode {int(ep_idx)} in {parquet_path}; "
+                    f"{missing_count}/{len(row_indices)} rows lack a complete camera triplet"
+                )
                 continue
             first_row = row_indices[0]
             language_instruction = _language_for(
