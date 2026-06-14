@@ -703,6 +703,47 @@ Analysis:
 Next:
 - Remove canceled TFDS scratch and relaunch the full conversion from `b4c397d`.
 
+## 2026-06-14T01:18:30Z - metadata-mapped full relaunch
+
+Goal:
+- Run the full TFDS conversion with the corrected episode-to-video mapping.
+
+Hypothesis:
+- Since the raw files match HF sizes and targeted multi-episode generation passed, the full build should generate without broad missing-frame skips.
+
+Change:
+- Removed the canceled TFDS scratch directory on a1001.
+- Launched full build from remote detached commit `b4c397d9de171316f07dc808a75c819745f8ce73`.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 3db0808
+- implementation_commit: b4c397d9de171316f07dc808a75c819745f8ce73
+- push/pull: implementation commit already pushed; worklog relaunch entry pending
+- changed_files: worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 worktree clean at `b4c397d9de171316f07dc808a75c819745f8ce73`
+
+Command / Job:
+- command: `sbatch --partition=cpu_long --time=7-00:00:00 --cpus-per-task=32 --mem=160G --export=ALL,...,MODE=full,MOLMOACT2_YAM_N_WORKERS=24,MOLMOACT2_YAM_MAX_PATHS_IN_MEMORY=24,HF_SNAPSHOT_MAX_WORKERS=1,HF_DOWNLOAD_RETRIES=12,HF_DOWNLOAD_RETRY_SLEEP=60 scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29053602
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29053602.{out,err}
+- artifacts: expected full TFDS dataset under /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset/1.0.0
+
+Result:
+- status: running
+- metrics/artifacts: job started on `cpu-00112`.
+- key evidence: `squeue` showed job `29053602` in `RUNNING` state.
+
+Analysis:
+- This relaunch should spend little time on raw download verification and then enter TFDS generation.
+
+Next:
+- Monitor logs, TFDS growth, storage usage, and any missing-frame messages.
+
 ## 2026-06-13T09:05:00Z - throttle full HF download after 429 failure
 
 Goal:
