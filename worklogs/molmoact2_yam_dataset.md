@@ -495,6 +495,49 @@ Analysis:
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke.
 
+## 2026-06-15T18:55:00-07:00 - full build completed and parallel upload launched
+
+Goal:
+- Validate the completed full MolmoAct2 YAM TFDS build and upload it to the OXE GCS bucket for ego-lap visualization.
+
+Hypothesis:
+- The apparent stderr tracebacks during finalization are multiprocessing semaphore cleanup warnings, not build failures, because all generation chunks completed, shuffling completed, and TFDS performed a successful sample read.
+
+Change:
+- Confirmed full job `29061545` completed successfully.
+- Generated a Slurm-side TFDS contact sheet after login-shell TensorFlow readers hit thread/segfault issues.
+- Updated `scripts/molmoact2_yam/stream_upload_from_a1001.sh` to support size-checked parallel streaming uploads via `UPLOAD_JOBS`, preserving serial upload as the default.
+
+Version Control:
+- agent_id: molmoact2-yam-20260613
+- worktree: /home/lzha/code/rlds_dataset_builder
+- worklog: /home/lzha/code/rlds_dataset_builder/worklogs/molmoact2_yam_dataset.md
+- branch: codex/molmoact2-yam-builder-20260613
+- base_commit: 1449e9e
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: scripts/molmoact2_yam/stream_upload_from_a1001.sh, worklogs/molmoact2_yam_dataset.md
+- remote_commit/status: a1001 build used detached commit `4f5d2b1fa4ea9a99125e19c8e78f13c46495ed77`
+
+Command / Job:
+- command: `sbatch ... scripts/molmoact2_yam/build_a1001.sbatch`
+- job_id: 29061545
+- run_dir: /lustre/fsw/portfolios/nvr/users/lzha/tensorflow_datasets/molmoact2_yam_dataset/1.0.0
+- logs: /lustre/fsw/portfolios/nvr/users/lzha/slurm_logs/molmoact2_yam/molmo2_yam_tfds_29061545.out and .err
+- artifacts: final TFDS dataset, contact sheet under /lustre/fsw/portfolios/nvr/users/lzha/results/molmoact2_yam_validation, local copy under cluster_results/a1001/molmoact2_yam_final_validation
+
+Result:
+- status: passed, upload in progress
+- metrics/artifacts: final TFDS size 1851G; 2048 train shards; dataset_info reports train numBytes `1986430948057`; `missing=13`, `truncating=12`, `skipping=0`; MaxRSS `78122172K`.
+- key evidence: build stdout ended with `RUN_END=2026-06-15T18:42:59-07:00`; Slurm state `COMPLETED` exit code `0`; built-in sample read returned `sample_steps 2205`, action/state shapes `(14,)`, nonzero top/left/right JPEG bytes, and sensible language.
+
+Analysis:
+- The long runtime was caused by CPU AV1 frame decode, resize/JPEG encoding, TFDS writing, and final shuffle over 32,246 episodes. The stderr semaphore warnings are cleanup noise after worker shutdown; the dataset finalized and was readable.
+- The contact sheet shows plausible nonblank overhead and wrist-camera views with expected square padding.
+
+Next:
+- Monitor the parallel GCS upload to `gs://pi0-cot/OXE/molmoact2_yam_dataset`, verify object count/size, then run ego-lap visualization on a v4 TPU before cleaning raw/local TFDS scratch.
+
 ## 2026-06-14T18:34:00Z - truncation patch validated at previous failure point
 
 Goal:
