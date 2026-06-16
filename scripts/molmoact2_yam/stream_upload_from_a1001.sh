@@ -8,6 +8,7 @@ GSUTIL="${GSUTIL:-gsutil}"
 SSH_BIN="${SSH_BIN:-ssh}"
 IDENTITY_FILE="${IDENTITY_FILE:-$HOME/.ssh/id_ed25519}"
 UPLOAD_JOBS="${UPLOAD_JOBS:-1}"
+UPLOAD_RETRIES="${UPLOAD_RETRIES:-3}"
 
 GCS_DEST="${GCS_DEST%/}"
 REMOTE_DATASET_DIR="${REMOTE_DATASET_DIR%/}"
@@ -29,6 +30,7 @@ echo "REMOTE_HOST=$REMOTE_HOST"
 echo "REMOTE_DATASET_DIR=$REMOTE_DATASET_DIR"
 echo "GCS_DEST=$GCS_DEST"
 echo "UPLOAD_JOBS=$UPLOAD_JOBS"
+echo "UPLOAD_RETRIES=$UPLOAD_RETRIES"
 
 mapfile -t files < <(
   "$SSH_BIN" "${SSH_OPTS[@]}" "$REMOTE_HOST" \
@@ -47,6 +49,7 @@ upload_one() {
   local remote_size="${entry##*$'\t'}"
   local src="$REMOTE_DATASET_DIR/$rel"
   local dst="$GCS_DEST/$rel"
+  local attempt=1
   local ssh_opts=(
     -F none
     -o BatchMode=yes
@@ -66,17 +69,25 @@ upload_one() {
     return 0
   fi
 
-  echo "uploading $rel -> $dst ($remote_size bytes)"
-  "$SSH_BIN" "${ssh_opts[@]}" "$REMOTE_HOST" "cat '$src'" | "$GSUTIL" -q cp - "$dst"
-
-  existing_size="$("$GSUTIL" ls -l "$dst" 2>/dev/null | awk 'NR == 1 {print $1}' || true)"
-  if [ "$existing_size" != "$remote_size" ]; then
-    echo "Size mismatch after upload for $rel: remote=$remote_size gcs=${existing_size:-missing}" >&2
-    return 1
-  fi
-  echo "uploaded $rel ($remote_size bytes)"
+  while [ "$attempt" -le "$UPLOAD_RETRIES" ]; do
+    echo "uploading $rel -> $dst ($remote_size bytes, attempt $attempt/$UPLOAD_RETRIES)"
+    if "$SSH_BIN" "${ssh_opts[@]}" "$REMOTE_HOST" "cat '$src'" | "$GSUTIL" -q cp - "$dst"; then
+      existing_size="$("$GSUTIL" ls -l "$dst" 2>/dev/null | awk 'NR == 1 {print $1}' || true)"
+      if [ "$existing_size" = "$remote_size" ]; then
+        echo "uploaded $rel ($remote_size bytes)"
+        return 0
+      fi
+      echo "Size mismatch after upload for $rel: remote=$remote_size gcs=${existing_size:-missing}" >&2
+    fi
+    attempt=$((attempt + 1))
+    if [ "$attempt" -le "$UPLOAD_RETRIES" ]; then
+      sleep $((attempt * 10))
+    fi
+  done
+  echo "Failed to upload $rel after $UPLOAD_RETRIES attempts" >&2
+  return 1
 }
-export REMOTE_HOST REMOTE_DATASET_DIR GCS_DEST GSUTIL SSH_BIN IDENTITY_FILE
+export REMOTE_HOST REMOTE_DATASET_DIR GCS_DEST GSUTIL SSH_BIN IDENTITY_FILE UPLOAD_RETRIES
 export -f upload_one
 
 if [ "$UPLOAD_JOBS" = "1" ]; then
