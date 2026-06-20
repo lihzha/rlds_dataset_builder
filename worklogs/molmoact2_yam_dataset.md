@@ -495,6 +495,42 @@ Analysis:
 Next:
 - Syntax-check, commit, push, deploy, and relaunch smoke.
 
+## 2026-06-20T22:10:00Z - YAM URDF FK sidecar plan
+
+Goal:
+- Add end-effector poses for `molmoact2_yam_dataset` without rewriting the 1.8 TiB TFDS shard set.
+
+Hypothesis:
+- The released YAM joint positions are the six revolute arm joints in radians per arm, with gripper values in the seventh slot. The official YAM URDF can therefore produce per-arm `link_6` poses from `observation.state` and `action`.
+
+Change:
+- Added a sidecar generator that reads parquet numeric columns, applies the same terminal-row truncations used by the TFDS build, computes left/right FK from the YAM URDF, and writes `eef_poses.npz`.
+- Added a numeric-only Hugging Face snapshot mode so the sidecar job can stage parquet and metadata without re-downloading videos.
+- Added an a1001 Slurm wrapper to generate and upload `gs://pi0-cot/OXE/molmoact2_yam_dataset/1.0.0/eef_poses.npz`.
+
+Version Control:
+- agent_id: molmoact2-yam-eef-20260620
+- worktree: /home/lzha/code/rlds_dataset_builder-worktrees/molmoact2-yam-eef
+- branch: codex/molmoact2-yam-eef-20260620
+- base_commit: 20da74b0d53ccc968e64da22ec76497d6395c6dc
+- implementation_commit: pending
+- push/pull: pending
+- changed_files: scripts/molmoact2_yam/compute_eef_poses_from_parquet.py, scripts/molmoact2_yam/yam.urdf, scripts/molmoact2_yam/download_hf_snapshot.py, scripts/molmoact2_yam/compute_eef_poses_a1001.sbatch, worklogs/molmoact2_yam_dataset.md
+
+Command / Job:
+- planned smoke: a1001 tiny parquet run with `--max-episodes`
+- planned full: `sbatch scripts/molmoact2_yam/compute_eef_poses_a1001.sbatch`
+
+Result:
+- status: implementation in progress
+- metrics/artifacts: target sidecar schema includes `episode_ids`, `episode_file_paths`, `episode_indices`, `chunk_indices`, `file_indices`, `first_frame_indices`, `episode_starts`, `episode_lengths`, `left_eef_pose`, `right_eef_pose`, `left_action_eef_pose`, `right_action_eef_pose`, and `metadata_json`.
+
+Analysis:
+- The URDF is a single-arm model and does not define a gripper TCP or a bimanual shared world/table frame. The sidecar stores each arm pose in its own YAM `base_link` frame, targeting `link_6`, and documents that frame in `metadata_json`.
+
+Next:
+- Syntax-check locally, deploy the exact commit to a1001, run a tiny smoke job, then launch and monitor the full sidecar generation/upload.
+
 ## 2026-06-15T18:55:00-07:00 - full build completed and parallel upload launched
 
 Goal:

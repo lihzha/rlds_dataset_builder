@@ -21,6 +21,16 @@ VIDEO_KEYS = [
 ]
 
 
+def is_numeric_file(filename: str) -> bool:
+    if filename.startswith("data/") and filename.endswith(".parquet"):
+        return True
+    if filename.startswith("meta/") and (
+        filename.endswith(".json") or filename.endswith(".parquet")
+    ):
+        return True
+    return False
+
+
 def sample_patterns(max_files: int, chunks: list[int]) -> list[str]:
     patterns = [
         "meta/info.json",
@@ -145,6 +155,11 @@ def main() -> None:
     parser.add_argument("--raw-dir", required=True, type=Path)
     parser.add_argument("--repo-id", default=REPO_ID)
     parser.add_argument("--full", action="store_true", help="Download the full snapshot.")
+    parser.add_argument(
+        "--numeric-only",
+        action="store_true",
+        help="Download only metadata and parquet numeric tables, excluding video files.",
+    )
     parser.add_argument("--max-files", type=int, default=1, help="Number of file triplets per chunk for smoke data.")
     parser.add_argument("--chunks", default="0", help="Comma-separated chunk indices for smoke data.")
     parser.add_argument(
@@ -159,6 +174,31 @@ def main() -> None:
     args = parser.parse_args()
 
     args.raw_dir.mkdir(parents=True, exist_ok=True)
+    if args.full and args.numeric_only:
+        raise ValueError("Use either --full or --numeric-only, not both.")
+
+    if args.numeric_only:
+        repo_info = HfApi().repo_info(args.repo_id, repo_type="dataset", files_metadata=True)
+        files = sorted(sibling.rfilename for sibling in repo_info.siblings if is_numeric_file(sibling.rfilename))
+        expected_sizes = {sibling.rfilename: sibling.size for sibling in repo_info.siblings}
+        total_size = sum(expected_sizes.get(filename) or 0 for filename in files)
+        print(
+            f"numeric-only download: files={len(files)} expected_bytes={total_size}",
+            flush=True,
+        )
+        for idx, filename in enumerate(files, start=1):
+            print(f"[{idx}/{len(files)}] downloading {filename}", flush=True)
+            download_with_retry(
+                repo_id=args.repo_id,
+                filename=filename,
+                raw_dir=args.raw_dir,
+                retries=args.retries,
+                retry_sleep=args.retry_sleep,
+                expected_size=expected_sizes.get(filename),
+                force=args.force,
+            )
+        return
+
     if args.full:
         if args.max_workers <= 1:
             repo_info = HfApi().repo_info(args.repo_id, repo_type="dataset", files_metadata=True)
