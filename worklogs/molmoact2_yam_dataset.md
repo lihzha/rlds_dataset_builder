@@ -531,6 +531,58 @@ Analysis:
 Next:
 - Syntax-check locally, deploy the exact commit to a1001, run a tiny smoke job, then launch and monitor the full sidecar generation/upload.
 
+## 2026-06-20T23:58:00Z - YAM EEF sidecar generated and uploaded
+
+Goal:
+- Generate YAM URDF end-effector poses for every MolmoAct2-YAM step and store them beside the GCS TFDS dataset.
+
+Change:
+- Ran full sidecar generation on a1001 job `29315696` from commit `ee7a2e4bae0d1d9ce6bf15f6cc68c4e92018f76d`.
+- Staged only numeric parquet/meta files under `/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam_numeric`; no videos were downloaded.
+- Uploaded final sidecar from the local workstation because a1001 `gsutil` lacked access to `gs://pi0-cot`.
+- Updated the a1001 Slurm wrapper so future runs do not fail generation when a1001 has no GCS auth; it now writes the summary first and warns with a manual upload command.
+
+Version Control:
+- agent_id: molmoact2-yam-eef-20260620
+- worktree: /home/lzha/code/rlds_dataset_builder-worktrees/molmoact2-yam-eef
+- branch: codex/molmoact2-yam-eef-20260620
+- generation_commit: ee7a2e4bae0d1d9ce6bf15f6cc68c4e92018f76d
+- implementation_commit: pending for wrapper/worklog update
+- changed_files: scripts/molmoact2_yam/compute_eef_poses_a1001.sbatch, worklogs/molmoact2_yam_dataset.md
+
+Command / Job:
+- smoke job: `29315694`
+- full job: `29315696`
+- manual upload: `ssh a1001 'cat /lustre/fsw/portfolios/nvr/users/lzha/results/molmoact2_yam_eef/eef_poses.npz' | gsutil cp - gs://pi0-cot/OXE/molmoact2_yam_dataset/1.0.0/eef_poses.npz`
+
+Result:
+- status: passed after manual upload and validation
+- GCS sidecar: `gs://pi0-cot/OXE/molmoact2_yam_dataset/1.0.0/eef_poses.npz`
+- size: 4,316,791,281 bytes
+- episodes: 32,246
+- steps: 76,046,646
+- pose keys: `left_eef_pose`, `right_eef_pose`, `left_action_eef_pose`, `right_action_eef_pose`
+- pose shape for each key: `(76046646, 6)` float32
+- join keys: `episode_metadata.file_path`, `episode_metadata.episode_index`, `episode_metadata.chunk_index`, `episode_metadata.file_index`
+- first state poses are finite and match the smoke output.
+
+Validation:
+- NPZ header/schema check passed.
+- `episode_lengths.sum()` equals `76046646`, matching the pose-array length.
+- `episode_starts` are monotonic and final `start + length` equals `76046646`.
+- First and last episode file paths match the TFDS raw-path key convention.
+- Peak Slurm MaxRSS was about 18.3G; no OOM occurred.
+- Job `29315696` was marked `FAILED` only because the final a1001 GCS-auth upload command returned 401 after successful NPZ generation.
+
+Cleanup:
+- Deleted `/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam_numeric`.
+- Deleted `/lustre/fsw/portfolios/nvr/users/lzha/datasets/raw/molmoact2_yam_eef_smoke`.
+- Deleted local a1001 copies of `eef_poses.npz` and `eef_poses_smoke.npz` after confirming the GCS object size.
+- Preserved small summary file `/lustre/fsw/portfolios/nvr/users/lzha/results/molmoact2_yam_eef/eef_poses_summary.json`.
+
+Next:
+- Use ego-lap query/visualization tools from branch `codex/molmoact2-yam-eef-20260620` for sidecar inspection.
+
 ## 2026-06-15T18:55:00-07:00 - full build completed and parallel upload launched
 
 Goal:

@@ -67,9 +67,6 @@ export HF_DOWNLOAD_RETRY_SLEEP="${HF_DOWNLOAD_RETRY_SLEEP:-30}"
   --truncation-log "$TRUNCATION_LOG" \
   --output "$OUTPUT_NPZ"
 
-"$ENV_DIR/bin/gsutil" cp "$OUTPUT_NPZ" "$GCS_DEST"
-"$ENV_DIR/bin/gsutil" ls -l "$GCS_DEST"
-
 "$ENV_DIR/bin/python" - <<'PY'
 import json
 import os
@@ -91,6 +88,17 @@ summary_path = path.with_suffix(".summary.json")
 summary_path.write_text(json.dumps(summary, indent=2) + "\n")
 print(json.dumps(summary, indent=2))
 PY
+
+if [ "${UPLOAD_TO_GCS:-1}" = "1" ]; then
+  if "$ENV_DIR/bin/gsutil" ls gs://pi0-cot >/dev/null 2>&1; then
+    "$ENV_DIR/bin/gsutil" cp "$OUTPUT_NPZ" "$GCS_DEST"
+    "$ENV_DIR/bin/gsutil" ls -l "$GCS_DEST"
+  else
+    echo "WARNING: a1001 gsutil cannot access gs://pi0-cot; leaving local sidecar at $OUTPUT_NPZ"
+    echo "Upload from an authenticated workstation, for example:"
+    echo "  ssh a1001 'cat $OUTPUT_NPZ' | gsutil cp - $GCS_DEST"
+  fi
+fi
 
 "$ENV_DIR/bin/python" - <<'PY'
 import os
